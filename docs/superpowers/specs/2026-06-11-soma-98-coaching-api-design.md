@@ -95,6 +95,13 @@ The current frontend pipeline also uses `category`, `startTime`, and `endTime`; 
 
 The application should expose one internal coaching analysis interface that returns `CoachFeedback`. Gemini is the default implementation because the current `acttub/web` pipeline already uses Gemini video upload, file polling, and JSON generation.
 
+Default alpha provider configuration:
+
+| Setting | Value |
+| --- | --- |
+| Provider | `gemini` |
+| Model | `Gemini 3.0 Flash` |
+
 Provider-specific details must stay inside adapters:
 
 - Upload and polling mechanics
@@ -102,7 +109,7 @@ Provider-specific details must stay inside adapters:
 - Model name and API key
 - Raw response parsing and cleanup
 
-The rest of the coaching API should depend only on the normalized `CoachFeedback` result. During validation, another LLM can be tested by adding a second adapter and selecting it through configuration. The HTTP response shape and persisted result fields should not change when the provider changes.
+The rest of the coaching API should depend only on the normalized `CoachFeedback` result. During validation, another LLM can be tested by adding a second adapter and selecting it through configuration. The HTTP response shape and persisted result fields should not change when the provider changes. The default Gemini model should also be configurable, not hard-coded, so model changes do not require API changes.
 
 Persist the provider name and model name used for each coaching result. This makes later quality comparison possible without exposing provider details in the public response.
 
