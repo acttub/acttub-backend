@@ -24,6 +24,13 @@ Fields:
 
 The API does not accept a focus category. The coaching model decides the single most useful focus based on the actor's intent and the video analysis.
 
+Video upload policy:
+
+- Frontend should downscale/compress videos toward `100MB` before upload.
+- Backend enforces a hard upload limit of `300MB` (`314572800` bytes).
+- Allowed content types are `video/mp4`, `video/quicktime`, and `video/webm`.
+- Oversized uploads return `413 Payload Too Large`.
+
 ## Response Contract
 
 All public API responses use a stable envelope so clients can parse every case consistently.
@@ -217,7 +224,9 @@ If the uploaded file is too large, return:
   "error": {
     "code": "PAYLOAD_TOO_LARGE",
     "message": "Uploaded video is too large.",
-    "details": {}
+    "details": {
+      "maxSizeBytes": 314572800
+    }
   }
 }
 ```
