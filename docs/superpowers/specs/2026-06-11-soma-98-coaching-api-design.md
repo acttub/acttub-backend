@@ -101,6 +101,7 @@ Default alpha provider configuration:
 | --- | --- |
 | Provider | `gemini` |
 | Model | `Gemini 3.0 Flash` |
+| Temperature | `0` |
 
 Provider-specific details must stay inside adapters:
 
@@ -109,9 +110,9 @@ Provider-specific details must stay inside adapters:
 - Model name and API key
 - Raw response parsing and cleanup
 
-The rest of the coaching API should depend only on the normalized `CoachFeedback` result. During validation, another LLM can be tested by adding a second adapter and selecting it through configuration. The HTTP response shape and persisted result fields should not change when the provider changes. The default Gemini model should also be configurable, not hard-coded, so model changes do not require API changes.
+The rest of the coaching API should depend only on the normalized `CoachFeedback` result. During validation, another LLM can be tested by adding a second adapter and selecting it through configuration. The HTTP response shape and persisted result fields should not change when the provider changes. The default Gemini model and sampling parameters should also be configurable, not hard-coded, so model changes do not require API changes.
 
-Persist the provider name and model name used for each coaching result. This makes later quality comparison possible without exposing provider details in the public response.
+Persist the provider name, model name, temperature, and prompt version used for each coaching result. This makes later quality comparison possible without exposing provider details in the public response.
 
 Current result contract to preserve:
 
@@ -187,7 +188,7 @@ The implementation should persist enough data to support later result lookup and
 - Coaching status and timestamps
 - Uploaded video metadata
 - `performanceIntent`
-- AI provider and model name
+- AI provider, model name, temperature, and prompt version
 - AI result fields: `sceneIntent`, `strength`, `focus`, `nextStep`
 - AI failure code/message when analysis fails
 
