@@ -31,9 +31,9 @@ Run `./gradlew test` before submitting changes. Add focused tests for new contro
 
 ## Commit & Pull Request Guidelines
 
-The current history only contains an initial commit, so use simple, action-oriented commit messages such as `Add health check endpoint` or `Fix request validation`.
+Use short, action-oriented commit messages such as `Add health check endpoint` or `Fix request validation`. Keep each commit focused on one logical change.
 
-Pull requests should include a short summary, test results, and linked issues when available. Include request/response examples for API behavior changes. For configuration changes, document required environment variables and safe defaults.
+Pull requests should include a short summary, test results, and linked issues when available. Include request/response examples for API behavior changes. For branch flow and protection rules, see `docs/branching.md`.
 
 ## Security & Configuration Tips
 
