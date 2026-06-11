@@ -21,16 +21,8 @@ Fields:
 | --- | --- | --- | --- |
 | `video` | file | yes | Performance video uploaded by the user. |
 | `performanceIntent` | string | yes | What the actor intended to express. |
-| `focusCategory` | enum | yes | Category the user wants feedback on. |
 
-Allowed `focusCategory` values:
-
-| Value | Meaning |
-| --- | --- |
-| `VOICE` | Voice and vocal delivery |
-| `EMOTION` | Emotional expression |
-| `MOVEMENT` | Body and movement |
-| `DELIVERY` | Line delivery |
+The API does not accept a focus category. The coaching model decides the single most useful focus based on the actor's intent and the video analysis.
 
 ## Successful Flow
 
@@ -49,17 +41,82 @@ Allowed `focusCategory` values:
   "coachingId": "coaching_123",
   "status": "COMPLETED",
   "input": {
-    "performanceIntent": "차분하지만 단호한 감정",
-    "focusCategory": "EMOTION"
+    "performanceIntent": "차분하지만 단호한 감정"
   },
   "result": {
-    "sceneIntent": "인물이 감정을 억누르며 상대를 설득하려는 장면으로 해석됩니다.",
-    "strength": "시선 유지와 말의 속도가 의도한 단호함을 잘 받쳐줍니다.",
-    "focus": "감정이 커지는 지점에서 호흡이 먼저 흔들려 대사의 끝이 약해집니다.",
-    "nextStep": "핵심 문장 직전에 한 박자 숨을 고르고 마지막 음절까지 힘을 유지해 보세요."
+    "sceneIntent": {
+      "text": "차분하지만 단호하게 상대를 설득하려는 장면",
+      "source": "actor_input"
+    },
+    "strength": {
+      "timecode": "0:48",
+      "axis": "emotion",
+      "signal": "시선을 유지한 채 말의 속도를 늦춘 순간",
+      "why": "감정을 바로 터뜨리지 않고 버티는 힘이 보여 장면의 의도가 살아났습니다.",
+      "tier": "execution"
+    },
+    "focus": {
+      "timecode": "0:00-0:15",
+      "axes": ["emotion", "speech"],
+      "observedSignal": "첫 대사 전부터 어깨와 목소리가 굳어 있었습니다.",
+      "rootCause": "도입부 긴장이 먼저 올라와 후반에 감정이 무너질 높이가 줄었습니다.",
+      "intentGap": "참다가 무너지는 흐름보다 처음부터 긴장한 사람처럼 보였습니다.",
+      "prescription": "첫 대사는 아직 괜찮은 사람처럼 시작해 보세요."
+    },
+    "nextStep": {
+      "text": "도입부 0:00-0:15만 다시 찍어보세요.",
+      "action": "retake_selected_range"
+    }
   }
 }
 ```
+
+## Analysis Pipeline
+
+SOMA-98 should reuse the current `acttub/web` coaching analysis logic, excluding the frontend-only focus category idea. The backend implementation should port the same pipeline shape:
+
+1. Write the uploaded video to a temporary file.
+2. Upload the file to Gemini Files API.
+3. Poll the uploaded Gemini file until it becomes `ACTIVE`.
+4. Run L0 observer once with the video file. This is the only step that directly sees the video. It extracts neutral observations with timecodes, lines, voice, face, gaze, and body movement.
+5. Run L1 persona analysis in parallel over the observer text:
+   - `emotion`
+   - `speech`
+   - `body`
+   - `audience`
+6. Allow partial persona failure. Continue if at least one persona returns a signal.
+7. Run L2 synthesizer over the persona signals to create one single-focus feedback card.
+8. Parse Gemini JSON into the current `CoachFeedback` structure.
+9. Delete the temporary local file and Gemini uploaded file.
+
+The current frontend pipeline also uses `category`, `startTime`, and `endTime`; SOMA-98 does not expose those fields unless added later. For this API, analyze the full uploaded video and pass a fixed internal category label if the imported prompt still requires one.
+
+Current result contract to preserve:
+
+| Field | Meaning |
+| --- | --- |
+| `sceneIntent.text` | Actor intent echoed or inferred. |
+| `sceneIntent.source` | `actor_input`, `ai_inferred`, or `actor_confirmed`. |
+| `strength.timecode` | Moment where the performance worked. |
+| `strength.axis` | Internal axis: `emotion`, `speech`, `face`, or `movement`. |
+| `strength.signal` | What was observed. |
+| `strength.why` | Why it supported the intent. |
+| `strength.tier` | `execution`, `attempt`, or `encouragement`. |
+| `focus.timecode` | The single most important focus range. |
+| `focus.axes` | Internal axes involved in the focus. |
+| `focus.observedSignal` | What was observed. |
+| `focus.rootCause` | Root cause behind the observation. |
+| `focus.intentGap` | Gap between actor intent and viewer impression. |
+| `focus.prescription` | One concrete correction. |
+| `nextStep.text` | Immediate next action. |
+| `nextStep.action` | Currently `retake_selected_range`. |
+
+Source files in `acttub/web`:
+
+- `web/src/server/coachAnalyze.ts`
+- `web/src/coach/personas.ts`
+- `web/src/coach/evaluation.ts`
+- `web/src/app/api/coach/analyze/route.ts`
 
 ## Validation Errors
 
@@ -69,7 +126,6 @@ Examples:
 
 - Missing `video`
 - Empty `performanceIntent`
-- Unsupported `focusCategory`
 - Unsupported video content type
 
 Response:
@@ -109,7 +165,6 @@ The implementation should persist enough data to support later result lookup and
 - Coaching status and timestamps
 - Uploaded video metadata
 - `performanceIntent`
-- `focusCategory`
 - AI result fields: `sceneIntent`, `strength`, `focus`, `nextStep`
 - AI failure code/message when analysis fails
 
@@ -121,5 +176,4 @@ Add focused API tests for:
 
 - Valid multipart request returns `201 Created` and `COMPLETED`
 - Missing required fields return `400 Bad Request`
-- Invalid `focusCategory` returns `400 Bad Request`
 - AI failure returns `502 Bad Gateway` and exposes a failed coaching id
