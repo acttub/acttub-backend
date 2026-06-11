@@ -73,11 +73,11 @@ The API does not accept a focus category. The coaching model decides the single 
 
 ## Analysis Pipeline
 
-SOMA-98 should reuse the current `acttub/web` coaching analysis logic, excluding the frontend-only focus category idea. The backend implementation should port the same pipeline shape:
+SOMA-98 should reuse the current `acttub/web` coaching analysis logic, excluding the frontend-only focus category idea. Gemini is the default provider for the alpha implementation, but the backend should keep the analysis pipeline behind a provider boundary so validation can compare other LLMs without changing the public API, database contract, or result schema.
 
 1. Write the uploaded video to a temporary file.
-2. Upload the file to Gemini Files API.
-3. Poll the uploaded Gemini file until it becomes `ACTIVE`.
+2. Call the configured LLM provider adapter. The default adapter uploads the file to Gemini Files API.
+3. For Gemini, poll the uploaded file until it becomes `ACTIVE`.
 4. Run L0 observer once with the video file. This is the only step that directly sees the video. It extracts neutral observations with timecodes, lines, voice, face, gaze, and body movement.
 5. Run L1 persona analysis in parallel over the observer text:
    - `emotion`
@@ -86,10 +86,25 @@ SOMA-98 should reuse the current `acttub/web` coaching analysis logic, excluding
    - `audience`
 6. Allow partial persona failure. Continue if at least one persona returns a signal.
 7. Run L2 synthesizer over the persona signals to create one single-focus feedback card.
-8. Parse Gemini JSON into the current `CoachFeedback` structure.
-9. Delete the temporary local file and Gemini uploaded file.
+8. Parse provider JSON into the current `CoachFeedback` structure.
+9. Delete the temporary local file and any provider-uploaded remote file.
 
 The current frontend pipeline also uses `category`, `startTime`, and `endTime`; SOMA-98 does not expose those fields unless added later. For this API, analyze the full uploaded video and pass a fixed internal category label if the imported prompt still requires one.
+
+## LLM Provider Strategy
+
+The application should expose one internal coaching analysis interface that returns `CoachFeedback`. Gemini is the default implementation because the current `acttub/web` pipeline already uses Gemini video upload, file polling, and JSON generation.
+
+Provider-specific details must stay inside adapters:
+
+- Upload and polling mechanics
+- Prompt request format
+- Model name and API key
+- Raw response parsing and cleanup
+
+The rest of the coaching API should depend only on the normalized `CoachFeedback` result. During validation, another LLM can be tested by adding a second adapter and selecting it through configuration. The HTTP response shape and persisted result fields should not change when the provider changes.
+
+Persist the provider name and model name used for each coaching result. This makes later quality comparison possible without exposing provider details in the public response.
 
 Current result contract to preserve:
 
@@ -165,6 +180,7 @@ The implementation should persist enough data to support later result lookup and
 - Coaching status and timestamps
 - Uploaded video metadata
 - `performanceIntent`
+- AI provider and model name
 - AI result fields: `sceneIntent`, `strength`, `focus`, `nextStep`
 - AI failure code/message when analysis fails
 
@@ -176,4 +192,5 @@ Add focused API tests for:
 
 - Valid multipart request returns `201 Created` and `COMPLETED`
 - Missing required fields return `400 Bad Request`
+- Provider adapter result is normalized into the same `CoachFeedback` response shape
 - AI failure returns `502 Bad Gateway` and exposes a failed coaching id
