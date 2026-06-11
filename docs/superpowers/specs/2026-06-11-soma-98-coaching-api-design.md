@@ -24,6 +24,38 @@ Fields:
 
 The API does not accept a focus category. The coaching model decides the single most useful focus based on the actor's intent and the video analysis.
 
+## Response Contract
+
+All public API responses use a stable envelope so clients can parse every case consistently.
+
+Success responses:
+
+```json
+{
+  "data": {}
+}
+```
+
+Error responses:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message.",
+    "details": {}
+  }
+}
+```
+
+Rules:
+
+- API IDs are strings, even when stored as `bigint` in the database.
+- Timestamps are ISO-8601 strings with an offset, for example `2026-06-11T10:30:00+09:00`.
+- Successful coaching responses include `data.result`.
+- Failed responses never include `data`.
+- `error.details` is always an object. Use `{}` when there is no extra context.
+
 ## Successful Flow
 
 1. Validate multipart request fields.
@@ -38,34 +70,38 @@ The API does not accept a focus category. The coaching model decides the single 
 
 ```json
 {
-  "coachingId": "coaching_123",
-  "status": "COMPLETED",
-  "input": {
-    "performanceIntent": "차분하지만 단호한 감정"
-  },
-  "result": {
-    "sceneIntent": {
-      "text": "차분하지만 단호하게 상대를 설득하려는 장면",
-      "source": "actor_input"
+  "data": {
+    "coachingId": "123",
+    "status": "COMPLETED",
+    "createdAt": "2026-06-11T10:29:00+09:00",
+    "completedAt": "2026-06-11T10:30:00+09:00",
+    "input": {
+      "performanceIntent": "차분하지만 단호한 감정"
     },
-    "strength": {
-      "timecode": "0:48",
-      "axis": "emotion",
-      "signal": "시선을 유지한 채 말의 속도를 늦춘 순간",
-      "why": "감정을 바로 터뜨리지 않고 버티는 힘이 보여 장면의 의도가 살아났습니다.",
-      "tier": "execution"
-    },
-    "focus": {
-      "timecode": "0:00-0:15",
-      "axes": ["emotion", "speech"],
-      "observedSignal": "첫 대사 전부터 어깨와 목소리가 굳어 있었습니다.",
-      "rootCause": "도입부 긴장이 먼저 올라와 후반에 감정이 무너질 높이가 줄었습니다.",
-      "intentGap": "참다가 무너지는 흐름보다 처음부터 긴장한 사람처럼 보였습니다.",
-      "prescription": "첫 대사는 아직 괜찮은 사람처럼 시작해 보세요."
-    },
-    "nextStep": {
-      "text": "도입부 0:00-0:15만 다시 찍어보세요.",
-      "action": "retake_selected_range"
+    "result": {
+      "sceneIntent": {
+        "text": "차분하지만 단호하게 상대를 설득하려는 장면",
+        "source": "actor_input"
+      },
+      "strength": {
+        "timecode": "0:48",
+        "axis": "emotion",
+        "signal": "시선을 유지한 채 말의 속도를 늦춘 순간",
+        "why": "감정을 바로 터뜨리지 않고 버티는 힘이 보여 장면의 의도가 살아났습니다.",
+        "tier": "execution"
+      },
+      "focus": {
+        "timecode": "0:00-0:15",
+        "axes": ["emotion", "speech"],
+        "observedSignal": "첫 대사 전부터 어깨와 목소리가 굳어 있었습니다.",
+        "rootCause": "도입부 긴장이 먼저 올라와 후반에 감정이 무너질 높이가 줄었습니다.",
+        "intentGap": "참다가 무너지는 흐름보다 처음부터 긴장한 사람처럼 보였습니다.",
+        "prescription": "첫 대사는 아직 괜찮은 사람처럼 시작해 보세요."
+      },
+      "nextStep": {
+        "text": "도입부 0:00-0:15만 다시 찍어보세요.",
+        "action": "retake_selected_range"
+      }
     }
   }
 }
@@ -160,8 +196,29 @@ Response:
 
 ```json
 {
-  "code": "INVALID_COACHING_REQUEST",
-  "message": "Invalid coaching request."
+  "error": {
+    "code": "INVALID_COACHING_REQUEST",
+    "message": "Invalid coaching request.",
+    "details": {
+      "fields": ["video"]
+    }
+  }
+}
+```
+
+If the uploaded file is too large, return:
+
+```http
+413 Payload Too Large
+```
+
+```json
+{
+  "error": {
+    "code": "PAYLOAD_TOO_LARGE",
+    "message": "Uploaded video is too large.",
+    "details": {}
+  }
 }
 ```
 
@@ -175,10 +232,33 @@ If validation succeeds but AI analysis fails, the API keeps the coaching input i
 
 ```json
 {
-  "coachingId": "coaching_123",
-  "status": "FAILED",
-  "code": "AI_ANALYSIS_FAILED",
-  "message": "Coaching analysis failed."
+  "error": {
+    "code": "AI_ANALYSIS_FAILED",
+    "message": "Coaching analysis failed.",
+    "details": {
+      "coachingId": "123",
+      "status": "FAILED"
+    }
+  }
+}
+```
+
+If synchronous analysis times out, keep the coaching input, mark the coaching status as `FAILED`, store the timeout reason, and return:
+
+```http
+504 Gateway Timeout
+```
+
+```json
+{
+  "error": {
+    "code": "AI_ANALYSIS_TIMEOUT",
+    "message": "Coaching analysis timed out.",
+    "details": {
+      "coachingId": "123",
+      "status": "FAILED"
+    }
+  }
 }
 ```
 
@@ -215,11 +295,13 @@ Success response:
 
 ```json
 {
-  "evaluationId": "evaluation_123",
-  "coachingId": "coaching_123",
-  "rating": 4,
-  "comment": "감정 흐름에 대한 피드백은 좋았는데, 발성 조언은 조금 더 구체적이면 좋겠습니다.",
-  "createdAt": "2026-06-11T10:30:00"
+  "data": {
+    "evaluationId": "456",
+    "coachingId": "123",
+    "rating": 4,
+    "comment": "감정 흐름에 대한 피드백은 좋았는데, 발성 조언은 조금 더 구체적이면 좋겠습니다.",
+    "createdAt": "2026-06-11T10:31:00+09:00"
+  }
 }
 ```
 
@@ -231,6 +313,58 @@ Evaluation rules:
 - Unknown `coachingId` returns `404 Not Found`.
 - Evaluating a non-`COMPLETED` coaching returns `409 Conflict`.
 - Submitting a second evaluation for the same coaching returns `409 Conflict`.
+- Evaluation responses always include `comment`; use `null` when the user did not provide one.
+
+Evaluation error examples:
+
+```json
+{
+  "error": {
+    "code": "INVALID_EVALUATION_REQUEST",
+    "message": "Invalid evaluation request.",
+    "details": {
+      "fields": ["rating"]
+    }
+  }
+}
+```
+
+```json
+{
+  "error": {
+    "code": "COACHING_NOT_FOUND",
+    "message": "Coaching not found.",
+    "details": {
+      "coachingId": "123"
+    }
+  }
+}
+```
+
+```json
+{
+  "error": {
+    "code": "COACHING_NOT_EVALUABLE",
+    "message": "Only completed coachings can be evaluated.",
+    "details": {
+      "coachingId": "123",
+      "status": "FAILED"
+    }
+  }
+}
+```
+
+```json
+{
+  "error": {
+    "code": "COACHING_EVALUATION_ALREADY_EXISTS",
+    "message": "Coaching evaluation already exists.",
+    "details": {
+      "coachingId": "123"
+    }
+  }
+}
+```
 
 ## Persistence
 
@@ -332,11 +466,15 @@ create table coaching_evaluations (
 
 Add focused API tests for:
 
-- Valid multipart request returns `201 Created` and `COMPLETED`
+- Valid multipart request returns `201 Created` with `data.status = COMPLETED`
+- Successful responses use the `data` envelope and string IDs
+- Error responses use the `error` envelope with `code`, `message`, and object `details`
 - Missing required fields return `400 Bad Request`
+- Oversized upload returns `413 Payload Too Large`
 - Provider adapter result is normalized into the same `CoachFeedback` response shape
 - AI failure returns `502 Bad Gateway` and exposes a failed coaching id
-- Valid evaluation request returns `201 Created`
+- AI timeout returns `504 Gateway Timeout` and exposes a failed coaching id
+- Valid evaluation request returns `201 Created` with `data.rating`
 - Evaluation with invalid `rating` returns `400 Bad Request`
 - Evaluation for unknown coaching returns `404 Not Found`
 - Evaluation for non-`COMPLETED` coaching returns `409 Conflict`
