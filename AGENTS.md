@@ -38,3 +38,7 @@ Pull requests should include a short summary, test results, and linked issues wh
 ## Security & Configuration Tips
 
 Do not commit secrets, credentials, local database dumps, or generated logs. Keep environment-specific settings outside tracked files when possible, and document required configuration in the PR or README.
+
+## Agent-Specific Instructions
+
+When the user says `ㄱㄱ`, treat it as approval to proceed with the current proposed next step.
