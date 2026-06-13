@@ -14,19 +14,28 @@ class ArchitectureDependencyTests {
 
 	@Test
 	void applicationLayerDoesNotDependOnPresentationOrInfrastructurePackages() throws IOException {
-		Path applicationPackage = Path.of("src/main/java/com/loading/acttub_backend/coaching/application");
-
-		List<String> violations;
-		try (Stream<Path> paths = Files.walk(applicationPackage)) {
-			violations = paths
-					.filter(path -> path.toString().endsWith(".java"))
-					.flatMap(this::importLines)
-					.filter(line -> line.contains("com.loading.acttub_backend.coaching.presentation")
-							|| line.contains("com.loading.acttub_backend.coaching.infrastructure"))
-					.toList();
-		}
+		List<String> violations = applicationImports()
+				.filter(line -> line.contains("com.loading.acttub_backend.coaching.presentation")
+						|| line.contains("com.loading.acttub_backend.coaching.infrastructure"))
+				.toList();
 
 		assertThat(violations).isEmpty();
+	}
+
+	@Test
+	void applicationLayerDoesNotDependOnSpringWeb() throws IOException {
+		List<String> violations = applicationImports()
+				.filter(line -> line.contains("org.springframework.web"))
+				.toList();
+
+		assertThat(violations).isEmpty();
+	}
+
+	private Stream<String> applicationImports() throws IOException {
+		Path applicationPackage = Path.of("src/main/java/com/loading/acttub_backend/coaching/application");
+		return Files.walk(applicationPackage)
+				.filter(path -> path.toString().endsWith(".java"))
+				.flatMap(this::importLines);
 	}
 
 	private Stream<String> importLines(Path path) {

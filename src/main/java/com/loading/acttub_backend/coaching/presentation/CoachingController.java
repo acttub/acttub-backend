@@ -6,6 +6,7 @@ import java.util.Map;
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.EvaluationCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationResult;
+import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.service.CoachingService;
 import com.loading.acttub_backend.coaching.application.service.EvaluationService;
 import com.loading.acttub_backend.coaching.presentation.dto.CoachingResponse;
@@ -38,7 +39,7 @@ public class CoachingController {
 			@RequestParam("video") MultipartFile video,
 			@RequestParam("performanceIntent") String performanceIntent
 	) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.create(video, performanceIntent))));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.create(toVideoInput(video), performanceIntent))));
 	}
 
 	@PostMapping("/api/v1/coachings/{coachingId}/evaluation")
@@ -66,6 +67,15 @@ public class CoachingController {
 				result.completedAt(),
 				new CoachingResponse.CoachingInput(result.performanceIntent()),
 				result.feedback()
+		);
+	}
+
+	private VideoInput toVideoInput(MultipartFile video) {
+		return new VideoInput(
+				video.getOriginalFilename(),
+				video.getContentType(),
+				video.getSize(),
+				video::getInputStream
 		);
 	}
 

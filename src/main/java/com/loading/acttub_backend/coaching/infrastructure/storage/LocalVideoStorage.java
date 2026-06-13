@@ -8,10 +8,10 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
 import com.loading.acttub_backend.coaching.application.model.StoredVideo;
+import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.port.VideoStorage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
 @Component
 public class LocalVideoStorage implements VideoStorage {
@@ -23,7 +23,7 @@ public class LocalVideoStorage implements VideoStorage {
 	}
 
 	@Override
-	public StoredVideo store(Long coachingId, MultipartFile video) {
+	public StoredVideo store(Long coachingId, VideoInput video) {
 		String storageKey = "coachings/" + coachingId + "/" + storedFilename(video);
 		Path destination = root.resolve(storageKey).normalize();
 		if (!destination.startsWith(root)) {
@@ -32,7 +32,7 @@ public class LocalVideoStorage implements VideoStorage {
 
 		try {
 			Files.createDirectories(destination.getParent());
-			try (InputStream inputStream = video.getInputStream()) {
+			try (InputStream inputStream = video.openStream()) {
 				Files.copy(inputStream, destination, StandardCopyOption.REPLACE_EXISTING);
 			}
 			return new StoredVideo(storageKey, destination.toUri().toString());
@@ -41,10 +41,10 @@ public class LocalVideoStorage implements VideoStorage {
 		}
 	}
 
-	private String storedFilename(MultipartFile video) {
-		String originalFilename = video.getOriginalFilename();
+	private String storedFilename(VideoInput video) {
+		String originalFilename = video.originalFilename();
 		if (originalFilename == null || originalFilename.isBlank()) {
-			return "video" + extension(video.getContentType());
+			return "video" + extension(video.contentType());
 		}
 		return Paths.get(originalFilename).getFileName().toString();
 	}

@@ -3,19 +3,19 @@ package com.loading.acttub_backend.coaching.infrastructure.ai;
 import java.math.BigDecimal;
 import java.util.List;
 
+import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalyzer;
 import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
 @Component
 @ConditionalOnProperty(name = "app.ai.coaching.stub-enabled", havingValue = "true")
 public class DefaultCoachingAnalyzer implements CoachingAnalyzer {
 
 	@Override
-	public CoachingAnalysisResult analyze(MultipartFile video, String performanceIntent) {
+	public CoachingAnalysisResult analyze(VideoInput video, String performanceIntent) {
 		CoachFeedback feedback = new CoachFeedback(
 				new CoachFeedback.SceneIntent(performanceIntent, "actor_input"),
 				new CoachFeedback.Strength(

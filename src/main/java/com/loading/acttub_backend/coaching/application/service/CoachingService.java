@@ -8,6 +8,7 @@ import java.util.Set;
 
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.StoredVideo;
+import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalyzer;
 import com.loading.acttub_backend.coaching.application.port.CoachingRepository;
 import com.loading.acttub_backend.coaching.application.port.VideoStorage;
@@ -19,7 +20,6 @@ import com.loading.acttub_backend.global.api.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class CoachingService {
@@ -44,7 +44,7 @@ public class CoachingService {
 	}
 
 	@Transactional(noRollbackFor = ApiException.class)
-	public CoachingResult create(MultipartFile video, String performanceIntent) {
+	public CoachingResult create(VideoInput video, String performanceIntent) {
 		validate(video, performanceIntent);
 
 		Coaching coaching = createAnalyzingCoaching(video, performanceIntent);
@@ -55,19 +55,19 @@ public class CoachingService {
 		return toResponse(coaching);
 	}
 
-	private Coaching createAnalyzingCoaching(MultipartFile video, String performanceIntent) {
+	private Coaching createAnalyzingCoaching(VideoInput video, String performanceIntent) {
 		OffsetDateTime now = OffsetDateTime.now(clock);
 		Coaching coaching = Coaching.analyzing(
 				performanceIntent,
-				video.getOriginalFilename(),
-				video.getContentType(),
-				video.getSize(),
+				video.originalFilename(),
+				video.contentType(),
+				video.sizeBytes(),
 				now
 		);
 		return coachingRepository.saveAndFlush(coaching);
 	}
 
-	private void storeVideo(Coaching coaching, MultipartFile video) {
+	private void storeVideo(Coaching coaching, VideoInput video) {
 		try {
 			StoredVideo storedVideo = videoStorage.store(coaching.getId(), video);
 			coaching.attachVideo(storedVideo.storageKey(), storedVideo.storageUri(), OffsetDateTime.now(clock));
@@ -84,7 +84,7 @@ public class CoachingService {
 		}
 	}
 
-	private CoachingAnalysisResult analyze(Coaching coaching, MultipartFile video, String performanceIntent) {
+	private CoachingAnalysisResult analyze(Coaching coaching, VideoInput video, String performanceIntent) {
 		try {
 			return coachingAnalyzer.analyze(video, performanceIntent);
 		} catch (RuntimeException e) {
@@ -128,8 +128,8 @@ public class CoachingService {
 		);
 	}
 
-	private void validate(MultipartFile video, String performanceIntent) {
-		if (video == null || video.isEmpty() || !ALLOWED_VIDEO_CONTENT_TYPES.contains(video.getContentType())) {
+	private void validate(VideoInput video, String performanceIntent) {
+		if (video == null || video.sizeBytes() == 0 || !ALLOWED_VIDEO_CONTENT_TYPES.contains(video.contentType())) {
 			throw new ApiException(
 					HttpStatus.BAD_REQUEST,
 					"INVALID_COACHING_REQUEST",
@@ -142,10 +142,10 @@ public class CoachingService {
 					HttpStatus.BAD_REQUEST,
 					"INVALID_COACHING_REQUEST",
 					"Invalid coaching request.",
-					Map.of("fields", List.of("performanceIntent"))
+				Map.of("fields", List.of("performanceIntent"))
 			);
 		}
-		if (video.getSize() > MAX_VIDEO_SIZE_BYTES) {
+		if (video.sizeBytes() > MAX_VIDEO_SIZE_BYTES) {
 			throw new ApiException(
 					HttpStatus.PAYLOAD_TOO_LARGE,
 					"PAYLOAD_TOO_LARGE",
