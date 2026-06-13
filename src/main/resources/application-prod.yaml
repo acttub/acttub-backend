@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+app:
+  ai:
+    coaching:
+      stub-enabled: ${COACHING_STUB_ANALYZER_ENABLED:false}
+  storage:
+    video:
+      root: ${VIDEO_STORAGE_ROOT}

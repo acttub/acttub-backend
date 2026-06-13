@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Acttub Backend Architecture Map</title>
+	<style>
+		:root {
+			--bg: #f5f7fb;
+			--panel: #ffffff;
+			--text: #162033;
+			--muted: #637083;
+			--line: #cdd6e4;
+			--good: #166534;
+			--bad: #b42318;
+			--blue: #dbeafe;
+			--green: #dcfce7;
+			--yellow: #fef3c7;
+			--red: #fee2e2;
+			--violet: #ede9fe;
+			--gray: #e5e7eb;
+			--accent: #2563eb;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--text);
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			line-height: 1.5;
+		}
+
+		main {
+			max-width: 1220px;
+			margin: 0 auto;
+			padding: 36px 20px 56px;
+		}
+
+		header {
+			margin-bottom: 24px;
+		}
+
+		h1,
+		h2,
+		h3 {
+			margin: 0;
+			letter-spacing: 0;
+		}
+
+		h1 {
+			font-size: 32px;
+			line-height: 1.2;
+		}
+
+		h2 {
+			margin-bottom: 16px;
+			font-size: 22px;
+		}
+
+		h3 {
+			font-size: 15px;
+		}
+
+		p {
+			margin: 8px 0 0;
+			color: var(--muted);
+		}
+
+		code {
+			font-family: "SFMono-Regular", Consolas, monospace;
+			font-size: 0.95em;
+		}
+
+		.section {
+			margin-top: 24px;
+			padding: 24px;
+			background: var(--panel);
+			border: 1px solid #e4e7ec;
+			border-radius: 8px;
+		}
+
+		.hero-grid {
+			display: grid;
+			grid-template-columns: 1.1fr 0.9fr;
+			gap: 18px;
+			align-items: stretch;
+		}
+
+		.summary {
+			padding: 18px;
+			background: #eef4ff;
+			border: 1px solid #bfd2ff;
+			border-radius: 8px;
+		}
+
+		.summary strong {
+			display: block;
+			font-size: 18px;
+		}
+
+		.legend {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 10px;
+		}
+
+		.legend-item {
+			padding: 12px;
+			border: 1px solid #e4e7ec;
+			border-radius: 8px;
+			background: #fff;
+			font-size: 13px;
+		}
+
+		.dot {
+			display: inline-block;
+			width: 10px;
+			height: 10px;
+			margin-right: 6px;
+			border-radius: 999px;
+			vertical-align: -1px;
+		}
+
+		.dot.blue {
+			background: #60a5fa;
+		}
+
+		.dot.green {
+			background: #4ade80;
+		}
+
+		.dot.yellow {
+			background: #facc15;
+		}
+
+		.dot.red {
+			background: #f87171;
+		}
+
+		.compare {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 18px;
+		}
+
+		.diagram {
+			padding: 18px;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: #fbfcff;
+		}
+
+		.diagram-title {
+			display: flex;
+			justify-content: space-between;
+			gap: 12px;
+			align-items: center;
+			margin-bottom: 14px;
+		}
+
+		.badge {
+			padding: 4px 8px;
+			border-radius: 999px;
+			font-size: 12px;
+			font-weight: 700;
+		}
+
+		.badge.current {
+			background: #fff1f0;
+			color: var(--bad);
+		}
+
+		.badge.clean {
+			background: #ecfdf3;
+			color: var(--good);
+		}
+
+		.stack {
+			display: grid;
+			gap: 10px;
+		}
+
+		.box {
+			padding: 12px;
+			border: 1px solid rgba(22, 32, 51, 0.14);
+			border-radius: 8px;
+		}
+
+		.box p {
+			font-size: 13px;
+		}
+
+		.presentation {
+			background: var(--blue);
+		}
+
+		.application {
+			background: var(--green);
+		}
+
+		.domain {
+			background: var(--yellow);
+		}
+
+		.infrastructure {
+			background: var(--red);
+		}
+
+		.global {
+			background: var(--violet);
+		}
+
+		.external {
+			background: var(--gray);
+		}
+
+		.arrow {
+			color: var(--accent);
+			font-weight: 800;
+			text-align: center;
+		}
+
+		.arrow.bad {
+			color: var(--bad);
+		}
+
+		.arrow.good {
+			color: var(--good);
+		}
+
+		.dependency-grid {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 12px;
+		}
+
+		.dependency {
+			padding: 14px;
+			border: 1px solid #e4e7ec;
+			border-radius: 8px;
+			background: #fff;
+		}
+
+		.dependency strong {
+			display: block;
+			margin-bottom: 8px;
+		}
+
+		.dependency ul {
+			display: grid;
+			gap: 8px;
+			margin: 0;
+			padding-left: 18px;
+			color: var(--muted);
+			font-size: 14px;
+		}
+
+		.callout {
+			padding: 14px;
+			border-radius: 8px;
+			border: 1px solid #fecaca;
+			background: #fff7f7;
+		}
+
+		.callout strong {
+			display: block;
+			color: var(--bad);
+		}
+
+		.flow {
+			display: grid;
+			grid-template-columns: repeat(7, minmax(95px, 1fr));
+			gap: 10px;
+			align-items: center;
+			overflow-x: auto;
+			padding-bottom: 4px;
+		}
+
+		.step {
+			min-width: 116px;
+			min-height: 98px;
+			padding: 12px;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: #fff;
+		}
+
+		.step strong {
+			display: block;
+			margin-bottom: 6px;
+			font-size: 14px;
+		}
+
+		.step span {
+			display: block;
+			color: var(--muted);
+			font-size: 12px;
+		}
+
+		.rules {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 14px;
+		}
+
+		.rule {
+			padding: 14px;
+			border: 1px solid #e4e7ec;
+			border-radius: 8px;
+			background: #f8fafc;
+		}
+
+		.rule strong {
+			display: block;
+			margin-bottom: 8px;
+		}
+
+		@media (max-width: 900px) {
+			.hero-grid,
+			.compare,
+			.dependency-grid,
+			.rules {
+				grid-template-columns: 1fr;
+			}
+
+			.flow {
+				grid-template-columns: 1fr;
+			}
+
+			.flow .arrow {
+				transform: rotate(90deg);
+			}
+		}
+	</style>
+</head>
+<body>
+<main>
+	<header>
+		<h1>Acttub Backend Architecture Map</h1>
+		<p>현재 코드는 application이 presentation DTO와 infrastructure repository 구현체를 직접 알지 않도록 정리된 구조입니다.</p>
+	</header>
+
+	<section class="section hero-grid">
+		<div class="summary">
+			<strong>핵심 결론</strong>
+			<p><code>Controller → Service → Domain</code> 흐름을 유지하면서, application은 <code>application.port</code>에만 의존합니다. command/result는 <code>application.model</code>에 있고, DTO 변환은 presentation이 맡습니다.</p>
+		</div>
+		<div class="legend">
+			<div class="legend-item"><span class="dot blue"></span><strong>presentation</strong><br>HTTP 요청/응답</div>
+			<div class="legend-item"><span class="dot green"></span><strong>application</strong><br>유스케이스 흐름</div>
+			<div class="legend-item"><span class="dot yellow"></span><strong>domain</strong><br>핵심 상태/규칙</div>
+			<div class="legend-item"><span class="dot red"></span><strong>infrastructure</strong><br>ai / persistence / storage</div>
+		</div>
+	</section>
+
+	<section class="section">
+		<h2>현재 구조와 남은 타협</h2>
+		<div class="compare">
+			<article class="diagram">
+				<div class="diagram-title">
+					<h3>현재 코드</h3>
+					<span class="badge clean">큰 역방향 의존 제거</span>
+				</div>
+				<div class="stack">
+					<div class="box presentation">
+						<h3>presentation</h3>
+						<p><code>CoachingController</code>, DTO</p>
+					</div>
+					<div class="arrow">↓ service 호출</div>
+					<div class="box application">
+						<h3>application</h3>
+						<p><code>service</code>, <code>port</code>, <code>model</code>로 분리</p>
+					</div>
+					<div class="arrow good">↓ domain 사용</div>
+					<div class="box domain">
+						<h3>domain</h3>
+						<p><code>Coaching</code>, <code>CoachFeedback</code>, <code>CoachingEvaluation</code></p>
+					</div>
+					<div class="arrow good">infrastructure → application.Repository port 구현</div>
+					<div class="box infrastructure">
+						<h3>infrastructure</h3>
+						<p><code>ai</code>, <code>persistence</code>, <code>storage</code>로 분리</p>
+					</div>
+					<div class="arrow good">presentation → response DTO 변환</div>
+					<div class="box global">
+						<h3>DTO는 presentation contract</h3>
+						<p><code>CoachingResponse</code>, <code>EvaluationResponse</code>는 controller에서 생성</p>
+					</div>
+				</div>
+			</article>
+
+			<article class="diagram">
+				<div class="diagram-title">
+					<h3>아직 남은 타협</h3>
+					<span class="badge current">실용적 Spring 구조</span>
+				</div>
+				<div class="stack">
+					<div class="box presentation">
+						<h3>application → global.api</h3>
+						<p>서비스가 <code>ApiException</code>과 <code>HttpStatus</code>를 사용합니다.</p>
+					</div>
+					<div class="arrow bad">HTTP 관심사가 application에 일부 존재</div>
+					<div class="box application">
+						<h3>domain → JPA</h3>
+						<p><code>Coaching</code> 엔티티가 <code>@Entity</code>, <code>@Table</code>을 압니다.</p>
+					</div>
+					<div class="arrow bad">저장 기술 어노테이션이 domain에 있음</div>
+					<div class="box domain">
+						<h3>엄격한 목표</h3>
+						<p>application 예외를 HTTP와 분리하고, 순수 domain과 JPA entity를 분리할 수 있습니다.</p>
+					</div>
+					<div class="arrow good">이번 변경 범위에서는 제외</div>
+					<div class="box infrastructure">
+						<h3>현재 집중한 개선</h3>
+						<p><code>application → presentation.dto</code>와 <code>application → infrastructure.Repository</code> 제거</p>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<section class="section">
+		<h2>현재 의존 관계</h2>
+		<div class="dependency-grid">
+			<div class="dependency">
+				<strong>presentation</strong>
+				<ul>
+					<li><code>CoachingController → CoachingService</code></li>
+					<li><code>CoachingController → EvaluationService</code></li>
+					<li><code>Controller → ApiEnvelope</code></li>
+				</ul>
+			</div>
+			<div class="dependency">
+				<strong>application</strong>
+				<ul>
+					<li><code>Service → domain</code></li>
+					<li><code>application.service → application.port</code></li>
+					<li><code>application.service → application.model</code></li>
+				</ul>
+			</div>
+			<div class="dependency">
+				<strong>infrastructure</strong>
+				<ul>
+					<li><code>persistence.JpaRepository → application.Repository port</code></li>
+					<li><code>persistence.JpaRepository → domain.Entity</code></li>
+					<li><code>storage.LocalVideoStorage → VideoStorage</code></li>
+					<li><code>ai.DefaultCoachingAnalyzer → CoachingAnalyzer</code></li>
+				</ul>
+			</div>
+		</div>
+		<div class="callout" style="margin-top: 14px;">
+			<strong>지금 기준</strong>
+			<p><code>VideoStorage</code>, <code>CoachingAnalyzer</code>, repository port는 <code>application.port</code>에 있고, command/result 값은 <code>application.model</code>에 있습니다. <code>CoachingResponse</code>, <code>EvaluationResponse</code>는 presentation에 남아 controller가 변환합니다.</p>
+		</div>
+	</section>
+
+	<section class="section">
+		<h2>코칭 생성 요청 흐름</h2>
+		<div class="flow">
+			<div class="step presentation">
+				<strong>Controller</strong>
+				<span>HTTP 요청 수신</span>
+			</div>
+			<div class="arrow">→</div>
+			<div class="step application">
+				<strong>Service</strong>
+				<span>유스케이스 순서 조립</span>
+			</div>
+			<div class="arrow">→</div>
+			<div class="step domain">
+				<strong>Coaching</strong>
+				<span>상태 생성/변경</span>
+			</div>
+			<div class="arrow">→</div>
+			<div class="step infrastructure">
+				<strong>Repository</strong>
+				<span>DB 저장</span>
+			</div>
+		</div>
+		<div class="flow" style="margin-top: 12px;">
+			<div class="step application">
+				<strong>VideoStorage port</strong>
+				<span>저장 기능 계약</span>
+			</div>
+			<div class="arrow">→</div>
+			<div class="step infrastructure">
+				<strong>LocalVideoStorage</strong>
+				<span>파일 저장 구현</span>
+			</div>
+			<div class="arrow">→</div>
+			<div class="step application">
+				<strong>CoachingAnalyzer port</strong>
+				<span>분석 기능 계약</span>
+			</div>
+			<div class="arrow">→</div>
+			<div class="step infrastructure">
+				<strong>DefaultAnalyzer</strong>
+				<span>분석 구현</span>
+			</div>
+		</div>
+	</section>
+
+	<section class="section">
+		<h2>클린하게 만들 때의 분리 기준</h2>
+		<div class="rules">
+			<div class="rule">
+				<strong>application이 모르게 만든 것</strong>
+				<p><code>CoachingResponse</code>, <code>EvaluationResponse</code> 같은 API DTO와 <code>infrastructure</code> 패키지의 JPA repository 구현체.</p>
+			</div>
+			<div class="rule">
+				<strong>application이 알아도 되는 것</strong>
+				<p><code>Coaching</code> 같은 domain 모델, 그리고 <code>VideoStorage</code>, <code>CoachingAnalyzer</code>처럼 application이 직접 정의한 port.</p>
+			</div>
+			<div class="rule">
+				<strong>infrastructure의 역할</strong>
+				<p>application이 정한 port를 실제 기술로 구현합니다. 로컬 파일, MySQL/JPA, Gemini/OpenAI 연결은 여기로 갑니다.</p>
+			</div>
+			<div class="rule">
+				<strong>presentation의 역할</strong>
+				<p>HTTP request를 application command로 바꾸고, application result를 response DTO로 바꿉니다.</p>
+			</div>
+		</div>
+	</section>
+</main>
+</body>
+</html>

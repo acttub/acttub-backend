@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>PR #3 Codex 리뷰 대응 정리</title>
+	<style>
+		:root {
+			--bg: #f6f7f9;
+			--surface: #ffffff;
+			--text: #1f2937;
+			--muted: #64748b;
+			--line: #d8dee8;
+			--accent: #2563eb;
+			--accent-soft: #e8f0ff;
+			--risk: #b45309;
+			--fixed: #047857;
+			--deferred: #7c3aed;
+			--code-bg: #111827;
+			--code-text: #e5e7eb;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--text);
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			line-height: 1.65;
+		}
+
+		header {
+			background: #0f172a;
+			color: #f8fafc;
+			padding: 42px 24px 34px;
+		}
+
+		.header-inner,
+		main {
+			width: min(1120px, calc(100% - 40px));
+			margin: 0 auto;
+		}
+
+		h1 {
+			margin: 0 0 12px;
+			font-size: 32px;
+			line-height: 1.2;
+			letter-spacing: 0;
+		}
+
+		header p {
+			margin: 0;
+			max-width: 820px;
+			color: #cbd5e1;
+		}
+
+		main {
+			padding: 28px 0 56px;
+		}
+
+		.summary-grid {
+			display: grid;
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+			gap: 12px;
+			margin-bottom: 24px;
+		}
+
+		.metric {
+			background: var(--surface);
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			padding: 16px;
+		}
+
+		.metric strong {
+			display: block;
+			font-size: 26px;
+			line-height: 1.1;
+			margin-bottom: 6px;
+		}
+
+		.metric span {
+			color: var(--muted);
+			font-size: 14px;
+		}
+
+		section {
+			background: var(--surface);
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			padding: 22px;
+			margin-top: 16px;
+		}
+
+		h2 {
+			margin: 0 0 14px;
+			font-size: 22px;
+			line-height: 1.3;
+			letter-spacing: 0;
+		}
+
+		h3 {
+			margin: 0 0 10px;
+			font-size: 17px;
+			line-height: 1.35;
+			letter-spacing: 0;
+		}
+
+		.issue {
+			border-top: 1px solid var(--line);
+			padding-top: 18px;
+			margin-top: 18px;
+		}
+
+		.issue:first-of-type {
+			border-top: 0;
+			padding-top: 0;
+			margin-top: 0;
+		}
+
+		.badges {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			margin: 8px 0 12px;
+		}
+
+		.badge {
+			display: inline-flex;
+			align-items: center;
+			height: 26px;
+			border-radius: 999px;
+			padding: 0 10px;
+			font-size: 13px;
+			font-weight: 700;
+			background: var(--accent-soft);
+			color: var(--accent);
+		}
+
+		.badge.risk {
+			background: #fff7ed;
+			color: var(--risk);
+		}
+
+		.badge.fixed {
+			background: #ecfdf5;
+			color: var(--fixed);
+		}
+
+		.badge.deferred {
+			background: #f5f3ff;
+			color: var(--deferred);
+		}
+
+		.explain {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 12px;
+			margin: 12px 0;
+		}
+
+		.box {
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			padding: 14px;
+			background: #fbfcfe;
+		}
+
+		.box strong {
+			display: block;
+			margin-bottom: 6px;
+		}
+
+		pre {
+			margin: 12px 0 0;
+			padding: 14px;
+			overflow-x: auto;
+			border-radius: 8px;
+			background: var(--code-bg);
+			color: var(--code-text);
+			font-size: 13px;
+			line-height: 1.55;
+		}
+
+		code {
+			font-family: "SFMono-Regular", Consolas, monospace;
+		}
+
+		.inline-code {
+			background: #eef2f7;
+			border-radius: 4px;
+			padding: 2px 5px;
+			font-family: "SFMono-Regular", Consolas, monospace;
+			font-size: 0.92em;
+		}
+
+		ul {
+			margin: 8px 0 0;
+			padding-left: 22px;
+		}
+
+		.note {
+			border-left: 4px solid var(--accent);
+			background: #f8fbff;
+			padding: 12px 14px;
+			margin-top: 12px;
+		}
+
+		@media (max-width: 880px) {
+			.summary-grid,
+			.explain {
+				grid-template-columns: 1fr;
+			}
+
+			h1 {
+				font-size: 26px;
+			}
+		}
+	</style>
+</head>
+<body>
+	<header>
+		<div class="header-inner">
+			<h1>PR #3 Codex 리뷰 대응 정리</h1>
+			<p>
+				Codex 리뷰에서 나온 지적을 기준으로, 무엇이 문제였고 어떤 방식으로 수정했는지 코드 예시와 함께 정리한 문서입니다.
+				마지막 JPA annotation 분리 항목은 이번 PR 범위에서 의도적으로 제외했습니다.
+			</p>
+		</div>
+	</header>
+
+	<main>
+		<div class="summary-grid">
+			<div class="metric">
+				<strong>13</strong>
+				<span>총 리뷰 항목</span>
+			</div>
+			<div class="metric">
+				<strong>12</strong>
+				<span>코드로 처리한 항목</span>
+			</div>
+			<div class="metric">
+				<strong>1</strong>
+				<span>의도적으로 미처리한 항목</span>
+			</div>
+			<div class="metric">
+				<strong>pass</strong>
+				<span><code>./gradlew test</code> 통과</span>
+			</div>
+		</div>
+
+		<section>
+			<h2>핵심 변경 흐름</h2>
+			<ul>
+				<li>런타임 파일 저장 폴더와 Java 패키지 이름 충돌을 분리했습니다.</li>
+				<li>운영 환경에서 가짜 AI 분석기가 기본 Bean으로 등록되지 않게 막았습니다.</li>
+				<li>focus axes JSON 컬럼 정규화 과정에서 중복/null 값이 배포를 막지 않도록 했습니다.</li>
+				<li>application 계층이 Spring Web, HTTP status, API response 세부사항을 직접 알지 않게 분리했습니다.</li>
+				<li>API 실패 응답이 일관되게 envelope 형식으로 내려가도록 예외 핸들러를 보강했습니다.</li>
+				<li>로그인 없는 상태에서 숫자 ID 기반 코칭 조회 API가 열리지 않도록 제거했습니다.</li>
+			</ul>
+		</section>
+
+		<section>
+			<h2>처리한 리뷰</h2>
+
+			<article class="issue">
+				<h3>1. <code>VideoStorage</code> Bean 구현체가 PR에 빠져 있던 문제</h3>
+				<div class="badges">
+					<span class="badge risk">P1</span>
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span><code class="inline-code">.gitignore</code>의 <code class="inline-code">storage/</code> 규칙이 루트 저장 폴더뿐 아니라 <code class="inline-code">src/.../infrastructure/storage</code> 패키지도 무시했습니다. 그래서 실제 Bean 구현체가 Git에 올라가지 않았습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span>ignore 대상을 루트의 런타임 폴더로 한정하고, <code class="inline-code">LocalVideoStorage</code>를 추적 대상으로 추가했습니다.</span>
+					</div>
+				</div>
+				<pre><code># .gitignore
+/storage/</code></pre>
+				<pre><code>@Component
+public class LocalVideoStorage implements VideoStorage {
+
+    @Override
+    public StoredVideo store(Long coachingId, VideoInput video) {
+        String storageKey = "coachings/" + coachingId + "/" + storedFilename(video);
+        Path destination = root.resolve(storageKey).normalize();
+        Files.createDirectories(destination.getParent());
+        try (InputStream inputStream = video.openStream()) {
+            Files.copy(inputStream, destination, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return new StoredVideo(storageKey, destination.toUri().toString());
+    }
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>2. 하드코딩된 analyzer가 운영 기본 Bean으로 등록되던 문제</h3>
+				<div class="badges">
+					<span class="badge risk">P1</span>
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>stub analyzer가 업로드 영상을 보지 않고 항상 같은 결과를 반환하면서 운영에서도 기본 구현체가 될 수 있었습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span><code class="inline-code">app.ai.coaching.stub-enabled=true</code>일 때만 등록되도록 조건부 Bean으로 변경했습니다. 기본값은 false입니다.</span>
+					</div>
+				</div>
+				<pre><code>@Component
+@ConditionalOnProperty(name = "app.ai.coaching.stub-enabled", havingValue = "true")
+public class DefaultCoachingAnalyzer implements CoachingAnalyzer {
+    ...
+}</code></pre>
+				<pre><code>app:
+  ai:
+    coaching:
+      stub-enabled: ${COACHING_STUB_ANALYZER_ENABLED:false}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>3. focus axes 정규화 없이 저장/마이그레이션하던 문제</h3>
+				<div class="badges">
+					<span class="badge risk">P1</span>
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>기존 JSON에 중복 축, null, 빈 문자열이 있으면 새 <code class="inline-code">coaching_focus_axes</code> 테이블의 unique/not null 제약 때문에 Flyway가 실패할 수 있었습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span>마이그레이션과 도메인 저장 모두에서 순서를 보존하며 trim, null/blank 제거, 중복 제거를 수행하도록 바꿨습니다.</span>
+					</div>
+				</div>
+				<pre><code>private List&lt;String&gt; normalizeAxes(List&lt;String&gt; axes) {
+    LinkedHashSet&lt;String&gt; normalizedAxes = new LinkedHashSet&lt;&gt;();
+    for (String axis : axes) {
+        if (axis == null) {
+            continue;
+        }
+        String normalizedAxis = axis.trim();
+        if (!normalizedAxis.isBlank()) {
+            normalizedAxes.add(normalizedAxis);
+        }
+    }
+    return new ArrayList&lt;&gt;(normalizedAxes);
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>4. JPA 매핑과 SQL DDL 타입이 어긋나던 문제</h3>
+				<div class="badges">
+					<span class="badge risk">P1</span>
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>DDL은 <code class="inline-code">text</code>인데 엔티티의 기본 <code class="inline-code">String</code> 매핑은 varchar로 해석될 수 있어 Hibernate validate에서 실패할 수 있었습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span>text 컬럼은 <code class="inline-code">columnDefinition = "text"</code>, varchar 컬럼은 length를 명시했습니다.</span>
+					</div>
+				</div>
+				<pre><code>@Column(nullable = false, columnDefinition = "text")
+private String performanceIntent;
+
+@Column(columnDefinition = "text")
+private String resultFocusPrescription;
+
+@Column(length = 1000)
+private String videoStorageUri;</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>5. 잘못된 평가 JSON이 envelope 없이 실패하던 문제</h3>
+				<div class="badges">
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>empty body, malformed JSON, JSON literal <code class="inline-code">null</code>은 서비스 검증 전에 실패해서 API 에러 포맷이 깨질 수 있었습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span><code class="inline-code">HttpMessageNotReadableException</code>을 처리하고, controller에서 null body를 명시적으로 검증했습니다.</span>
+					</div>
+				</div>
+				<pre><code>@ExceptionHandler(HttpMessageNotReadableException.class)
+ResponseEntity&lt;ApiErrorEnvelope&gt; handleUnreadableMessage() {
+    return invalidEvaluationRequest("body");
+}</code></pre>
+				<pre><code>if (request == null) {
+    throw new ApiException(
+        HttpStatus.BAD_REQUEST,
+        "INVALID_EVALUATION_REQUEST",
+        "Invalid evaluation request.",
+        Map.of("fields", List.of("body"))
+    );
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>6. application port가 <code>MultipartFile</code>에 의존하던 문제</h3>
+				<div class="badges">
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>application 계층이 Spring Web 타입을 직접 알면 HTTP가 아닌 worker, batch, async flow에서 재사용하기 어려워집니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span><code class="inline-code">VideoInput</code> application 모델을 만들고, controller에서만 <code class="inline-code">MultipartFile</code>을 변환합니다.</span>
+					</div>
+				</div>
+				<pre><code>public record VideoInput(
+        String originalFilename,
+        String contentType,
+        long sizeBytes,
+        Content content
+) {
+    public InputStream openStream() throws IOException {
+        return content.openStream();
+    }
+}</code></pre>
+				<pre><code>private VideoInput toVideoInput(MultipartFile video) {
+    return new VideoInput(
+        video.getOriginalFilename(),
+        video.getContentType(),
+        video.getSize(),
+        video::getInputStream
+    );
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>7. 동시 중복 평가 요청이 500으로 샐 수 있던 문제</h3>
+				<div class="badges">
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>중복 여부 확인과 insert 사이에 race condition이 있으면 DB unique constraint 예외가 발생하고, 이 예외가 409로 변환되지 않을 수 있었습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span>저장을 <code class="inline-code">saveAndFlush</code>로 바꿔 예외를 서비스 안에서 잡고, 같은 <code class="inline-code">COACHING_EVALUATION_ALREADY_EXISTS</code> 응답으로 변환했습니다.</span>
+					</div>
+				</div>
+				<pre><code>try {
+    return evaluationRepository.saveAndFlush(new CoachingEvaluation(...));
+} catch (DataIntegrityViolationException e) {
+    throw alreadyEvaluated(coachingId);
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>8. analyzer timeout이 502로만 처리되던 문제</h3>
+				<div class="badges">
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>provider timeout도 일반 분석 실패와 같이 502로 내려가면 클라이언트가 재시도 가능한 timeout을 구분할 수 없습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span><code class="inline-code">CoachingAnalysisTimeoutException</code>을 추가하고, 서비스에서 먼저 잡아 <code class="inline-code">AI_ANALYSIS_TIMEOUT</code>으로 매핑했습니다.</span>
+					</div>
+				</div>
+				<pre><code>} catch (CoachingAnalysisTimeoutException e) {
+    coaching.fail("AI_ANALYSIS_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
+    coachingRepository.saveAndFlush(coaching);
+    throw new ApplicationException(
+        "AI_ANALYSIS_TIMEOUT",
+        "Coaching analysis timed out.",
+        Map.of("coachingId", String.valueOf(coaching.getId()), "status", "FAILED")
+    );
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>9. application service가 HTTP status를 알던 문제</h3>
+				<div class="badges">
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>use case 계층이 <code class="inline-code">HttpStatus</code>와 API 응답 예외를 직접 만들고 있었습니다. 이러면 web adapter 밖에서 재사용하기 어렵습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span>application 전용 <code class="inline-code">ApplicationException</code>을 만들고, HTTP status 매핑은 global handler로 옮겼습니다.</span>
+					</div>
+				</div>
+				<pre><code>public class ApplicationException extends RuntimeException {
+    private final String code;
+    private final Map&lt;String, Object&gt; details;
+}</code></pre>
+				<pre><code>@ExceptionHandler(ApplicationException.class)
+ResponseEntity&lt;ApiErrorEnvelope&gt; handleApplicationException(ApplicationException exception) {
+    return ResponseEntity
+        .status(statusFor(exception.code()))
+        .body(ApiErrorEnvelope.error(exception.code(), exception.getMessage(), exception.details()));
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>10. 숫자가 아닌 <code>coachingId</code> path가 envelope 없이 실패하던 문제</h3>
+				<div class="badges">
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span><code class="inline-code">/api/v1/coachings/abc/evaluation</code>처럼 숫자가 아닌 path value는 controller 진입 전에 바인딩 실패가 발생했습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span><code class="inline-code">MethodArgumentTypeMismatchException</code>을 global handler에서 잡아 <code class="inline-code">INVALID_COACHING_ID</code>로 반환합니다.</span>
+					</div>
+				</div>
+				<pre><code>@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+ResponseEntity&lt;ApiErrorEnvelope&gt; handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+    if ("coachingId".equals(exception.getName())) {
+        return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
+            "INVALID_COACHING_ID",
+            "Invalid coaching id.",
+            Map.of("coachingId", String.valueOf(exception.getValue()))
+        ));
+    }
+    ...
+}</code></pre>
+			</article>
+
+			<article class="issue">
+				<h3>11. 로그인 없는 상태의 코칭 조회 API 노출 문제</h3>
+				<div class="badges">
+					<span class="badge fixed">처리 완료</span>
+				</div>
+				<div class="explain">
+					<div class="box">
+						<strong>문제</strong>
+						<span>로그인이 없는 상태에서 숫자 <code class="inline-code">coachingId</code> 기반 조회 API를 열어두면 다른 사용자의 분석 결과를 추측 조회할 수 있습니다.</span>
+					</div>
+					<div class="box">
+						<strong>변경</strong>
+						<span>GET <code class="inline-code">/api/v1/coachings/{coachingId}</code>를 제거하고, 생성 응답에서만 분석 결과를 반환하도록 했습니다.</span>
+					</div>
+				</div>
+				<pre><code>@Test
+void doesNotExposeStoredCoachingLookup() throws Exception {
+    String coachingId = createCoaching();
+
+    mockMvc.perform(get("/api/v1/coachings/{coachingId}", coachingId))
+            .andExpect(status().isNotFound());
+}</code></pre>
+			</article>
+		</section>
+
+		<section>
+			<h2>이번 PR에서 의도적으로 하지 않은 것</h2>
+			<article class="issue">
+				<h3>domain layer에서 JPA annotation 제거</h3>
+				<div class="badges">
+					<span class="badge deferred">이번 PR 미처리</span>
+				</div>
+				<p>
+					Codex는 <code class="inline-code">coaching.domain</code> 안의 <code class="inline-code">@Entity</code>,
+					<code class="inline-code">@Table</code> 등 JPA annotation을 persistence 관심사로 보고 분리를 제안했습니다.
+					하지만 이 변경은 persistence entity, mapper, repository adapter를 새로 나누는 큰 리팩터링입니다.
+				</p>
+				<p>
+					이번 PR의 목적은 코칭 API 구현과 리뷰 리스크 제거이므로, 이 항목은 별도 리팩터링 PR로 분리하는 것이 낫다고 판단했습니다.
+					현재는 domain entity가 JPA entity 역할도 함께 수행하는 구조를 유지합니다.
+				</p>
+			</article>
+		</section>
+
+		<section>
+			<h2>검증</h2>
+			<ul>
+				<li>각 주요 수정 후 <code class="inline-code">./gradlew test</code>를 실행했습니다.</li>
+				<li>마지막 확인 기준 전체 테스트는 성공했습니다.</li>
+				<li>application 계층에서 <code class="inline-code">org.springframework.web</code>, <code class="inline-code">org.springframework.http</code>, <code class="inline-code">global.api</code> import가 생기지 않도록 architecture test를 보강했습니다.</li>
+			</ul>
+			<pre><code>BUILD SUCCESSFUL</code></pre>
+		</section>
+	</main>
+</body>
+</html>

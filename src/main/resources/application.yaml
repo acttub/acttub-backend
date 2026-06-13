@@ -1,3 +1,21 @@
 spring:
   application:
     name: acttub-backend
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 300MB
+      max-request-size: 300MB
+
+app:
+  ai:
+    coaching:
+      stub-enabled: ${COACHING_STUB_ANALYZER_ENABLED:false}
+  storage:
+    video:
+      root: ${VIDEO_STORAGE_ROOT:storage/videos}
