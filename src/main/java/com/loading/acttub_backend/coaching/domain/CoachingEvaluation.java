@@ -23,6 +23,7 @@ public class CoachingEvaluation {
 	@Column(nullable = false)
 	private int rating;
 
+	@Column(columnDefinition = "text")
 	private String comment;
 
 	@Column(nullable = false)
