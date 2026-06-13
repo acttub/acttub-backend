@@ -13,6 +13,7 @@ import com.loading.acttub_backend.coaching.domain.Coaching;
 import com.loading.acttub_backend.coaching.domain.CoachingEvaluation;
 import com.loading.acttub_backend.coaching.domain.CoachingStatus;
 import com.loading.acttub_backend.global.api.ApiException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,22 +77,30 @@ public class EvaluationService {
 
 	private void validateNotEvaluated(Long coachingId) {
 		if (evaluationRepository.existsByCoachingId(coachingId)) {
-			throw new ApiException(
-					HttpStatus.CONFLICT,
-					"COACHING_EVALUATION_ALREADY_EXISTS",
-					"Coaching evaluation already exists.",
-					Map.of("coachingId", String.valueOf(coachingId))
-			);
+			throw alreadyEvaluated(coachingId);
 		}
 	}
 
 	private CoachingEvaluation saveEvaluation(Long coachingId, EvaluationCommand command) {
-		return evaluationRepository.save(new CoachingEvaluation(
-				coachingId,
-				command.rating(),
-				normalizeComment(command.comment()),
-				OffsetDateTime.now(clock)
-		));
+		try {
+			return evaluationRepository.saveAndFlush(new CoachingEvaluation(
+					coachingId,
+					command.rating(),
+					normalizeComment(command.comment()),
+					OffsetDateTime.now(clock)
+			));
+		} catch (DataIntegrityViolationException e) {
+			throw alreadyEvaluated(coachingId);
+		}
+	}
+
+	private ApiException alreadyEvaluated(Long coachingId) {
+		return new ApiException(
+				HttpStatus.CONFLICT,
+				"COACHING_EVALUATION_ALREADY_EXISTS",
+				"Coaching evaluation already exists.",
+				Map.of("coachingId", String.valueOf(coachingId))
+		);
 	}
 
 	private EvaluationResult toResponse(CoachingEvaluation evaluation) {
