@@ -14,7 +14,12 @@ import com.loading.acttub_backend.coaching.presentation.dto.EvaluationRequest;
 import com.loading.acttub_backend.coaching.presentation.dto.EvaluationResponse;
 import com.loading.acttub_backend.global.api.ApiEnvelope;
 import com.loading.acttub_backend.global.api.ApiException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
+@Tag(name = "Coachings", description = "코칭 분석 및 평가 API")
 public class CoachingController {
 
 	private final CoachingService coachingService;
@@ -34,16 +40,29 @@ public class CoachingController {
 		this.evaluationService = evaluationService;
 	}
 
-	@PostMapping("/api/v1/coachings")
+	@PostMapping(value = "/api/v1/coachings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@Operation(
+			summary = "코칭 피드백 생성",
+			description = "연기 영상을 업로드하고 연기 의도를 함께 전달해 코칭 분석 결과를 생성합니다."
+	)
+	@ApiResponse(responseCode = "201", description = "코칭 피드백 생성 완료")
 	public ResponseEntity<ApiEnvelope<CoachingResponse>> create(
+			@Parameter(description = "업로드할 연기 영상 파일")
 			@RequestParam("video") MultipartFile video,
+			@Parameter(description = "사용자가 의도한 연기 방향")
 			@RequestParam("performanceIntent") String performanceIntent
 	) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.create(toVideoInput(video), performanceIntent))));
 	}
 
-	@PostMapping("/api/v1/coachings/{coachingId}/evaluation")
+	@PostMapping(value = "/api/v1/coachings/{coachingId}/evaluation", consumes = MediaType.APPLICATION_JSON_VALUE)
+	@Operation(
+			summary = "코칭 평가 등록",
+			description = "완료된 코칭 결과에 대한 사용자 평가를 등록합니다."
+	)
+	@ApiResponse(responseCode = "201", description = "코칭 평가 등록 완료")
 	public ResponseEntity<ApiEnvelope<EvaluationResponse>> evaluate(
+			@Parameter(description = "코칭 ID")
 			@PathVariable Long coachingId,
 			@RequestBody EvaluationRequest request
 	) {

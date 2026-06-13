@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:file:./config/application-local-secret.yaml
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/acttub?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
     username: ${DB_USERNAME:root}
@@ -8,7 +10,7 @@ spring:
 app:
   ai:
     coaching:
-      stub-enabled: ${COACHING_STUB_ANALYZER_ENABLED:true}
+      stub-enabled: ${COACHING_STUB_ANALYZER_ENABLED:false}
   storage:
     video:
       root: ${VIDEO_STORAGE_ROOT:${user.home}/Desktop/acttub-video-storage}
