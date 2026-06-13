@@ -12,6 +12,9 @@ spring:
     enabled: true
 
 app:
+  ai:
+    coaching:
+      stub-enabled: true
   storage:
     video:
       root: build/test-video-storage

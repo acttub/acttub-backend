@@ -16,6 +16,9 @@ spring:
       max-request-size: 300MB
 
 app:
+  ai:
+    coaching:
+      stub-enabled: ${COACHING_STUB_ANALYZER_ENABLED:false}
   storage:
     video:
       root: ${VIDEO_STORAGE_ROOT:storage/videos}

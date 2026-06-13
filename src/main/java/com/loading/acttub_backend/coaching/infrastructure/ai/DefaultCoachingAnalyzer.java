@@ -6,10 +6,12 @@ import java.util.List;
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalyzer;
 import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
-@Service
+@Component
+@ConditionalOnProperty(name = "app.ai.coaching.stub-enabled", havingValue = "true")
 public class DefaultCoachingAnalyzer implements CoachingAnalyzer {
 
 	@Override
