@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
@@ -52,6 +53,22 @@ class ApiExceptionHandler {
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	ResponseEntity<ApiErrorEnvelope> handleUnreadableMessage() {
 		return invalidEvaluationRequest("body");
+	}
+
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	ResponseEntity<ApiErrorEnvelope> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+		if ("coachingId".equals(exception.getName())) {
+			return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
+					"INVALID_COACHING_ID",
+					"Invalid coaching id.",
+					Map.of("coachingId", String.valueOf(exception.getValue()))
+			));
+		}
+		return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
+				"INVALID_REQUEST",
+				"Invalid request.",
+				Map.of("field", exception.getName(), "value", String.valueOf(exception.getValue()))
+		));
 	}
 
 	private ResponseEntity<ApiErrorEnvelope> invalidCoachingRequest(String field) {

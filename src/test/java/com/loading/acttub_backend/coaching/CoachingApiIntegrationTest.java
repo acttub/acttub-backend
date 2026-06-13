@@ -201,6 +201,21 @@ class CoachingApiIntegrationTest {
 				.andExpect(jsonPath("$.error.details.fields[0]").value("body"));
 	}
 
+	@Test
+	void rejectsInvalidCoachingIdPathWithEnvelope() throws Exception {
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/evaluation", "abc")
+						.contentType("application/json")
+						.content("""
+								{
+								  "rating": 5,
+								  "comment": ""
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_COACHING_ID"))
+				.andExpect(jsonPath("$.error.details.coachingId").value("abc"));
+	}
+
 	private String createCoaching() throws Exception {
 		MvcResult result = mockMvc.perform(multipart("/api/v1/coachings")
 						.file(video("video/mp4"))
