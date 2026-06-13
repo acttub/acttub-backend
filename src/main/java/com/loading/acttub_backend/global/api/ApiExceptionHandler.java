@@ -4,11 +4,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @RestControllerAdvice
 class ApiExceptionHandler {
@@ -39,10 +40,23 @@ class ApiExceptionHandler {
 		));
 	}
 
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	ResponseEntity<ApiErrorEnvelope> handleUnreadableMessage() {
+		return invalidEvaluationRequest("body");
+	}
+
 	private ResponseEntity<ApiErrorEnvelope> invalidCoachingRequest(String field) {
 		return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
 				"INVALID_COACHING_REQUEST",
 				"Invalid coaching request.",
+				Map.of("fields", List.of(field))
+		));
+	}
+
+	private ResponseEntity<ApiErrorEnvelope> invalidEvaluationRequest(String field) {
+		return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
+				"INVALID_EVALUATION_REQUEST",
+				"Invalid evaluation request.",
 				Map.of("fields", List.of(field))
 		));
 	}

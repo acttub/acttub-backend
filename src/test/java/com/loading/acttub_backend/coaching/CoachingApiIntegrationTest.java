@@ -172,6 +172,35 @@ class CoachingApiIntegrationTest {
 				.andExpect(jsonPath("$.error.details.coachingId").value(coachingId));
 	}
 
+	@Test
+	void rejectsUnreadableEvaluationBodyWithEnvelope() throws Exception {
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/evaluation", 1)
+						.contentType("application/json")
+						.content("{"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_EVALUATION_REQUEST"))
+				.andExpect(jsonPath("$.error.details.fields[0]").value("body"));
+	}
+
+	@Test
+	void rejectsEmptyEvaluationBodyWithEnvelope() throws Exception {
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/evaluation", 1)
+						.contentType("application/json"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_EVALUATION_REQUEST"))
+				.andExpect(jsonPath("$.error.details.fields[0]").value("body"));
+	}
+
+	@Test
+	void rejectsNullEvaluationBodyWithEnvelope() throws Exception {
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/evaluation", 1)
+						.contentType("application/json")
+						.content("null"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_EVALUATION_REQUEST"))
+				.andExpect(jsonPath("$.error.details.fields[0]").value("body"));
+	}
+
 	private String createCoaching() throws Exception {
 		MvcResult result = mockMvc.perform(multipart("/api/v1/coachings")
 						.file(video("video/mp4"))

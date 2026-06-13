@@ -1,5 +1,8 @@
 package com.loading.acttub_backend.coaching.presentation;
 
+import java.util.List;
+import java.util.Map;
+
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.EvaluationCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationResult;
@@ -9,6 +12,7 @@ import com.loading.acttub_backend.coaching.presentation.dto.CoachingResponse;
 import com.loading.acttub_backend.coaching.presentation.dto.EvaluationRequest;
 import com.loading.acttub_backend.coaching.presentation.dto.EvaluationResponse;
 import com.loading.acttub_backend.global.api.ApiEnvelope;
+import com.loading.acttub_backend.global.api.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,6 +46,14 @@ public class CoachingController {
 			@PathVariable Long coachingId,
 			@RequestBody EvaluationRequest request
 	) {
+		if (request == null) {
+			throw new ApiException(
+					HttpStatus.BAD_REQUEST,
+					"INVALID_EVALUATION_REQUEST",
+					"Invalid evaluation request.",
+					Map.of("fields", List.of("body"))
+			);
+		}
 		EvaluationResult result = evaluationService.evaluate(coachingId, new EvaluationCommand(request.rating(), request.comment()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(result)));
 	}
