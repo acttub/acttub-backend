@@ -55,6 +55,17 @@ public class CoachingService {
 		return toResponse(coaching);
 	}
 
+	@Transactional(readOnly = true)
+	public CoachingResult get(Long coachingId) {
+		Coaching coaching = coachingRepository.findById(coachingId)
+				.orElseThrow(() -> new ApplicationException(
+						"COACHING_NOT_FOUND",
+						"Coaching not found.",
+						Map.of("coachingId", String.valueOf(coachingId))
+				));
+		return toResponse(coaching);
+	}
+
 	private Coaching createAnalyzingCoaching(VideoInput video, String performanceIntent) {
 		OffsetDateTime now = OffsetDateTime.now(clock);
 		Coaching coaching = Coaching.analyzing(

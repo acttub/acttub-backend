@@ -2,6 +2,7 @@ package com.loading.acttub_backend.coaching;
 
 import static org.hamcrest.Matchers.notNullValue;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -159,6 +160,25 @@ class CoachingApiIntegrationTest {
 				.andExpect(jsonPath("$.data.coachingId").value(coachingId))
 				.andExpect(jsonPath("$.data.rating").value(4))
 				.andExpect(jsonPath("$.data.comment").value("감정 흐름은 좋았고 발성 조언은 더 구체적이면 좋겠습니다."));
+	}
+
+	@Test
+	void getsCompletedCoaching() throws Exception {
+		String coachingId = createCoaching();
+
+		mockMvc.perform(get("/api/v1/coachings/{coachingId}", coachingId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.coachingId").value(coachingId))
+				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
+				.andExpect(jsonPath("$.data.result.focus.prescription", notNullValue()));
+	}
+
+	@Test
+	void returnsNotFoundWhenGettingMissingCoaching() throws Exception {
+		mockMvc.perform(get("/api/v1/coachings/{coachingId}", 999999))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code").value("COACHING_NOT_FOUND"))
+				.andExpect(jsonPath("$.error.details.coachingId").value("999999"));
 	}
 
 	@Test
