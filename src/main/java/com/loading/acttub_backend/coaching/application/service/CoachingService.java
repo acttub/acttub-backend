@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.loading.acttub_backend.coaching.application.model.ApplicationException;
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.StoredVideo;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
@@ -17,8 +18,6 @@ import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.Coaching;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
 import com.loading.acttub_backend.coaching.domain.CoachingStatus;
-import com.loading.acttub_backend.global.api.ApiException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +43,7 @@ public class CoachingService {
 		this.clock = Clock.systemDefaultZone();
 	}
 
-	@Transactional(noRollbackFor = ApiException.class)
+	@Transactional(noRollbackFor = ApplicationException.class)
 	public CoachingResult create(VideoInput video, String performanceIntent) {
 		validate(video, performanceIntent);
 
@@ -76,8 +75,7 @@ public class CoachingService {
 		} catch (RuntimeException e) {
 			coaching.fail("VIDEO_STORAGE_FAILED", e.getMessage(), OffsetDateTime.now(clock));
 			coachingRepository.saveAndFlush(coaching);
-			throw new ApiException(
-					HttpStatus.INTERNAL_SERVER_ERROR,
+			throw new ApplicationException(
 					"VIDEO_STORAGE_FAILED",
 					"Video storage failed.",
 					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
@@ -91,8 +89,7 @@ public class CoachingService {
 		} catch (CoachingAnalysisTimeoutException e) {
 			coaching.fail("AI_ANALYSIS_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
 			coachingRepository.saveAndFlush(coaching);
-			throw new ApiException(
-					HttpStatus.GATEWAY_TIMEOUT,
+			throw new ApplicationException(
 					"AI_ANALYSIS_TIMEOUT",
 					"Coaching analysis timed out.",
 					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
@@ -100,8 +97,7 @@ public class CoachingService {
 		} catch (RuntimeException e) {
 			coaching.fail("AI_ANALYSIS_FAILED", e.getMessage(), OffsetDateTime.now(clock));
 			coachingRepository.saveAndFlush(coaching);
-			throw new ApiException(
-					HttpStatus.BAD_GATEWAY,
+			throw new ApplicationException(
 					"AI_ANALYSIS_FAILED",
 					"Coaching analysis failed.",
 					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
@@ -140,24 +136,21 @@ public class CoachingService {
 
 	private void validate(VideoInput video, String performanceIntent) {
 		if (video == null || video.sizeBytes() == 0 || !ALLOWED_VIDEO_CONTENT_TYPES.contains(video.contentType())) {
-			throw new ApiException(
-					HttpStatus.BAD_REQUEST,
+			throw new ApplicationException(
 					"INVALID_COACHING_REQUEST",
 					"Invalid coaching request.",
 					Map.of("fields", List.of("video"))
 			);
 		}
 		if (performanceIntent == null || performanceIntent.isBlank()) {
-			throw new ApiException(
-					HttpStatus.BAD_REQUEST,
+			throw new ApplicationException(
 					"INVALID_COACHING_REQUEST",
 					"Invalid coaching request.",
-				Map.of("fields", List.of("performanceIntent"))
+					Map.of("fields", List.of("performanceIntent"))
 			);
 		}
 		if (video.sizeBytes() > MAX_VIDEO_SIZE_BYTES) {
-			throw new ApiException(
-					HttpStatus.PAYLOAD_TOO_LARGE,
+			throw new ApplicationException(
 					"PAYLOAD_TOO_LARGE",
 					"Uploaded video is too large.",
 					Map.of("maxSizeBytes", MAX_VIDEO_SIZE_BYTES)

@@ -10,13 +10,13 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import com.loading.acttub_backend.coaching.application.model.ApplicationException;
 import com.loading.acttub_backend.coaching.application.model.EvaluationCommand;
 import com.loading.acttub_backend.coaching.application.port.CoachingEvaluationRepository;
 import com.loading.acttub_backend.coaching.application.port.CoachingRepository;
 import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.Coaching;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
-import com.loading.acttub_backend.global.api.ApiException;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -33,7 +33,7 @@ class EvaluationServiceTests {
 		when(evaluationRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
 
 		assertThatThrownBy(() -> service.evaluate(1L, new EvaluationCommand(5, "")))
-				.isInstanceOf(ApiException.class)
+				.isInstanceOf(ApplicationException.class)
 				.hasMessage("Coaching evaluation already exists.");
 	}
 

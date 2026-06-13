@@ -3,6 +3,8 @@ package com.loading.acttub_backend.global.api;
 import java.util.List;
 import java.util.Map;
 
+import com.loading.acttub_backend.coaching.application.model.ApplicationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -18,6 +20,13 @@ class ApiExceptionHandler {
 	ResponseEntity<ApiErrorEnvelope> handleApiException(ApiException exception) {
 		return ResponseEntity
 				.status(exception.status())
+				.body(ApiErrorEnvelope.error(exception.code(), exception.getMessage(), exception.details()));
+	}
+
+	@ExceptionHandler(ApplicationException.class)
+	ResponseEntity<ApiErrorEnvelope> handleApplicationException(ApplicationException exception) {
+		return ResponseEntity
+				.status(statusFor(exception.code()))
 				.body(ApiErrorEnvelope.error(exception.code(), exception.getMessage(), exception.details()));
 	}
 
@@ -59,5 +68,18 @@ class ApiExceptionHandler {
 				"Invalid evaluation request.",
 				Map.of("fields", List.of(field))
 		));
+	}
+
+	private HttpStatus statusFor(String code) {
+		return switch (code) {
+			case "INVALID_COACHING_REQUEST", "INVALID_EVALUATION_REQUEST" -> HttpStatus.BAD_REQUEST;
+			case "PAYLOAD_TOO_LARGE" -> HttpStatus.PAYLOAD_TOO_LARGE;
+			case "COACHING_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+			case "COACHING_NOT_EVALUABLE", "COACHING_EVALUATION_ALREADY_EXISTS" -> HttpStatus.CONFLICT;
+			case "AI_ANALYSIS_FAILED" -> HttpStatus.BAD_GATEWAY;
+			case "AI_ANALYSIS_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
+			case "VIDEO_STORAGE_FAILED" -> HttpStatus.INTERNAL_SERVER_ERROR;
+			default -> HttpStatus.INTERNAL_SERVER_ERROR;
+		};
 	}
 }

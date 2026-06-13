@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
+import com.loading.acttub_backend.coaching.application.model.ApplicationException;
 import com.loading.acttub_backend.coaching.application.model.EvaluationCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationResult;
 import com.loading.acttub_backend.coaching.application.port.CoachingEvaluationRepository;
@@ -12,9 +13,7 @@ import com.loading.acttub_backend.coaching.application.port.CoachingRepository;
 import com.loading.acttub_backend.coaching.domain.Coaching;
 import com.loading.acttub_backend.coaching.domain.CoachingEvaluation;
 import com.loading.acttub_backend.coaching.domain.CoachingStatus;
-import com.loading.acttub_backend.global.api.ApiException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,8 +44,7 @@ public class EvaluationService {
 
 	private void validateRating(EvaluationCommand command) {
 		if (command.rating() == null || command.rating() < 1 || command.rating() > 5) {
-			throw new ApiException(
-					HttpStatus.BAD_REQUEST,
+			throw new ApplicationException(
 					"INVALID_EVALUATION_REQUEST",
 					"Invalid evaluation request.",
 					Map.of("fields", List.of("rating"))
@@ -56,8 +54,7 @@ public class EvaluationService {
 
 	private Coaching findCoaching(Long coachingId) {
 		return coachingRepository.findById(coachingId)
-				.orElseThrow(() -> new ApiException(
-						HttpStatus.NOT_FOUND,
+				.orElseThrow(() -> new ApplicationException(
 						"COACHING_NOT_FOUND",
 						"Coaching not found.",
 						Map.of("coachingId", String.valueOf(coachingId))
@@ -66,8 +63,7 @@ public class EvaluationService {
 
 	private void validateEvaluable(Coaching coaching) {
 		if (coaching.getStatus() != CoachingStatus.COMPLETED) {
-			throw new ApiException(
-					HttpStatus.CONFLICT,
+			throw new ApplicationException(
 					"COACHING_NOT_EVALUABLE",
 					"Only completed coachings can be evaluated.",
 					Map.of("coachingId", String.valueOf(coaching.getId()), "status", coaching.getStatus().name())
@@ -94,9 +90,8 @@ public class EvaluationService {
 		}
 	}
 
-	private ApiException alreadyEvaluated(Long coachingId) {
-		return new ApiException(
-				HttpStatus.CONFLICT,
+	private ApplicationException alreadyEvaluated(Long coachingId) {
+		return new ApplicationException(
 				"COACHING_EVALUATION_ALREADY_EXISTS",
 				"Coaching evaluation already exists.",
 				Map.of("coachingId", String.valueOf(coachingId))

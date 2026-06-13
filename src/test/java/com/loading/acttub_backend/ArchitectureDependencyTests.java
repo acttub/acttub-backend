@@ -31,6 +31,16 @@ class ArchitectureDependencyTests {
 		assertThat(violations).isEmpty();
 	}
 
+	@Test
+	void applicationLayerDoesNotDependOnApiResponseDetails() throws IOException {
+		List<String> violations = applicationImports()
+				.filter(line -> line.contains("com.loading.acttub_backend.global.api")
+						|| line.contains("org.springframework.http"))
+				.toList();
+
+		assertThat(violations).isEmpty();
+	}
+
 	private Stream<String> applicationImports() throws IOException {
 		Path applicationPackage = Path.of("src/main/java/com/loading/acttub_backend/coaching/application");
 		return Files.walk(applicationPackage)
