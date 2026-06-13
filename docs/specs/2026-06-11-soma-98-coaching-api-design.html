@@ -227,10 +227,83 @@
 			background: var(--soft-red);
 		}
 
+		.schema-diagram {
+			display: grid;
+			grid-template-columns: minmax(280px, 1.15fr) minmax(240px, 0.85fr);
+			gap: 18px;
+			align-items: stretch;
+			margin-top: 18px;
+		}
+
+		.schema-table {
+			border: 1px solid #b6c2d4;
+			border-radius: 8px;
+			background: #ffffff;
+			overflow: hidden;
+		}
+
+		.schema-table-title {
+			display: flex;
+			justify-content: space-between;
+			gap: 12px;
+			padding: 10px 12px;
+			background: #e8f1ff;
+			border-bottom: 1px solid #b6c2d4;
+			font-weight: 800;
+		}
+
+		.schema-table-title small {
+			color: var(--muted);
+			font-weight: 700;
+		}
+
+		.schema-fields {
+			margin: 0;
+			padding: 10px 12px 12px;
+			list-style: none;
+			color: var(--text);
+		}
+
+		.schema-fields li {
+			display: grid;
+			grid-template-columns: 86px 1fr;
+			gap: 8px;
+			margin-top: 0;
+			padding: 6px 0;
+			border-bottom: 1px solid #edf1f7;
+			font-size: 13px;
+		}
+
+		.schema-fields li:last-child {
+			border-bottom: 0;
+		}
+
+		.schema-key {
+			color: #1d4ed8;
+			font-family: "SFMono-Regular", Consolas, monospace;
+			font-weight: 800;
+		}
+
+		.schema-side {
+			display: grid;
+			gap: 18px;
+		}
+
+		.relationship-note {
+			margin-top: 14px;
+			padding: 12px 14px;
+			border: 1px solid #c7d2fe;
+			border-radius: 8px;
+			background: #eef2ff;
+			color: #3730a3;
+			font-size: 14px;
+		}
+
 		@media (max-width: 900px) {
 			.summary-grid,
 			.two-column,
-			.three-column {
+			.three-column,
+			.schema-diagram {
 				grid-template-columns: 1fr;
 			}
 		}
@@ -240,7 +313,7 @@
 <main>
 	<header>
 		<h1>SOMA-98 코칭 API 설계</h1>
-		<p>알파 단계 코칭 실행 API 명세입니다. Markdown 원본을 브라우저에서 읽기 좋게 옮긴 HTML 문서입니다.</p>
+		<p>알파 단계 코칭 실행 API 명세입니다. 이 HTML 문서를 현재 스펙의 기준 문서로 사용합니다.</p>
 		<div class="summary-grid">
 			<div class="card">
 				<span class="badge">메인 API</span>
@@ -274,6 +347,7 @@
 		</div>
 		<p>이 API는 연기 영상과 코칭 맥락을 받아 AI 코칭을 동기 실행하고, 입력값과 AI 결과를 데이터베이스에 저장한 뒤 같은 응답에서 완료 결과를 반환합니다.</p>
 		<p>AI 결과에 대한 사용자 평가는 사용자가 결과를 확인한 뒤 별도 후속 API로 저장합니다.</p>
+		<p>현재는 로그인과 소유자 검증이 없으므로 저장된 코칭 결과를 ID로 다시 조회하는 공개 API를 제공하지 않습니다.</p>
 	</section>
 
 	<section class="section">
@@ -393,24 +467,24 @@
 
 	<section class="section">
 		<h2>분석 파이프라인</h2>
-		<p>SOMA-98은 프론트엔드 전용 focus category 아이디어를 제외하고, 현재 <code>acttub/web</code>의 코칭 분석 로직을 재사용해야 합니다. 알파 구현의 기본 provider는 Gemini이지만, 백엔드는 분석 파이프라인을 provider 경계 뒤에 숨겨야 합니다.</p>
+		<p>SOMA-98의 현재 백엔드 구현은 프론트엔드 전용 focus category 입력을 받지 않고, Gemini adapter 뒤에서 영상 업로드와 JSON 분석 요청을 처리합니다.</p>
 		<ol>
-			<li>업로드된 영상을 임시 파일로 씁니다.</li>
-			<li>설정된 LLM provider adapter를 호출합니다. 기본 adapter는 파일을 Gemini Files API에 업로드합니다.</li>
-			<li>Gemini의 경우 업로드된 파일이 <code>ACTIVE</code> 상태가 될 때까지 polling합니다.</li>
-			<li>영상 파일을 입력으로 L0 observer를 한 번 실행합니다.</li>
-			<li><code>emotion</code>, <code>speech</code>, <code>body</code>, <code>audience</code>에 대해 L1 persona 분석을 병렬 실행합니다.</li>
-			<li>일부 persona 실패를 허용합니다. 최소 하나의 persona가 signal을 반환하면 계속 진행합니다.</li>
-			<li>persona signal을 바탕으로 L2 synthesizer를 실행해 단일 focus 피드백 카드를 생성합니다.</li>
+			<li>multipart 요청을 검증합니다.</li>
+			<li>상태가 <code>ANALYZING</code>인 coaching row를 먼저 저장합니다.</li>
+			<li>업로드된 영상을 <code>VideoStorage</code> 구현체에 저장하고, 저장 key와 URI를 coaching row에 기록합니다.</li>
+			<li>설정된 <code>CoachingAnalyzer</code> 구현체를 호출합니다. 기본 구현은 <code>GeminiCoachingAnalyzer</code>입니다.</li>
+			<li>Gemini adapter는 Files API로 영상을 resumable upload합니다.</li>
+			<li>업로드된 파일이 <code>ACTIVE</code> 상태가 될 때까지 polling합니다.</li>
+			<li><code>generateContent</code>를 한 번 호출해 정해진 JSON 형식의 코칭 결과를 생성합니다.</li>
 			<li>provider JSON을 현재 <code>CoachFeedback</code> 구조로 파싱합니다.</li>
-			<li>임시 로컬 파일과 provider에 업로드된 원격 파일을 삭제합니다.</li>
+			<li>AI 결과를 coaching row와 <code>coaching_focus_axes</code>에 저장하고 상태를 <code>COMPLETED</code>로 바꿉니다.</li>
 		</ol>
-		<p>현재 프론트엔드 파이프라인은 <code>category</code>, <code>startTime</code>, <code>endTime</code>도 사용하지만, SOMA-98은 나중에 명시적으로 추가하지 않는 한 이 필드들을 노출하지 않습니다.</p>
+		<p>현재 프론트엔드 파이프라인은 <code>category</code>, <code>startTime</code>, <code>endTime</code>도 사용하지만, SOMA-98 백엔드 API는 나중에 명시적으로 추가하지 않는 한 이 필드들을 노출하지 않습니다.</p>
 	</section>
 
 	<section class="section">
 		<h2>LLM 제공자 전략</h2>
-		<p>애플리케이션은 <code>CoachFeedback</code>을 반환하는 내부 코칭 분석 인터페이스 하나를 노출합니다. 현재 <code>acttub/web</code> 파이프라인이 Gemini 영상 업로드, 파일 polling, JSON 생성을 이미 사용하고 있으므로 Gemini가 기본 구현입니다.</p>
+		<p>애플리케이션은 <code>CoachFeedback</code>을 반환하는 내부 코칭 분석 인터페이스 하나를 노출합니다. 현재 기본 구현은 Gemini Files API와 <code>generateContent</code>를 사용하는 <code>GeminiCoachingAnalyzer</code>입니다.</p>
 		<table>
 			<thead>
 			<tr>
@@ -425,15 +499,15 @@
 			</tr>
 			<tr>
 				<td>모델</td>
-				<td><code>Gemini 3.0 Flash</code></td>
+				<td><code>gemini-3.5-flash</code></td>
 			</tr>
 			<tr>
 				<td>Temperature</td>
-				<td><code>0</code></td>
+				<td><code>0.2</code></td>
 			</tr>
 			<tr>
 				<td>프롬프트 버전</td>
-				<td><code>analysis-v0.1</code></td>
+				<td><code>analysis-v0.2</code></td>
 			</tr>
 			</tbody>
 		</table>
@@ -443,6 +517,29 @@
 			<li>프롬프트 요청 형식</li>
 			<li>모델명과 API key</li>
 			<li>원본 응답 파싱과 cleanup</li>
+		</ul>
+		<h3>환경 설정</h3>
+		<table>
+			<thead>
+			<tr>
+				<th>환경 변수</th>
+				<th>기본값 또는 의미</th>
+			</tr>
+			</thead>
+			<tbody>
+			<tr><td><code>GEMINI_API_KEY</code></td><td>Gemini API key입니다. stub이 꺼져 있으면 필수입니다.</td></tr>
+			<tr><td><code>GEMINI_MODEL</code></td><td>기본값은 <code>gemini-3.5-flash</code>입니다.</td></tr>
+			<tr><td><code>GEMINI_TEMPERATURE</code></td><td>기본값은 <code>0.2</code>입니다.</td></tr>
+			<tr><td><code>GEMINI_PROMPT_VERSION</code></td><td>기본값은 <code>analysis-v0.2</code>입니다.</td></tr>
+			<tr><td><code>COACHING_STUB_ANALYZER_ENABLED</code></td><td><code>true</code>이면 실제 Gemini 대신 stub 분석기를 사용합니다. <code>test</code> 프로필에서는 true입니다.</td></tr>
+			<tr><td><code>VIDEO_STORAGE_ROOT</code></td><td>로컬 프로필 기본값은 <code>${user.home}/Desktop/acttub-video-storage</code>입니다.</td></tr>
+			</tbody>
+		</table>
+		<p>로컬 실행에서는 프로젝트 루트의 <code>.env</code> 파일로 환경 변수를 주입할 수 있습니다. <code>.env</code>는 Git에 커밋하지 않습니다.</p>
+		<h3>API 문서</h3>
+		<ul>
+			<li>Swagger UI: <code>/swagger-ui.html</code></li>
+			<li>OpenAPI JSON: <code>/v3/api-docs</code></li>
 		</ul>
 		<h3>현재 결과 계약</h3>
 		<table>
@@ -456,12 +553,12 @@
 			<tr><td><code>sceneIntent.text</code></td><td>배우 의도를 그대로 반영하거나 추론한 텍스트입니다.</td></tr>
 			<tr><td><code>sceneIntent.source</code></td><td><code>actor_input</code>, <code>ai_inferred</code>, <code>actor_confirmed</code> 중 하나입니다.</td></tr>
 			<tr><td><code>strength.timecode</code></td><td>연기가 잘 작동한 순간입니다.</td></tr>
-			<tr><td><code>strength.axis</code></td><td>내부 축입니다. <code>emotion</code>, <code>speech</code>, <code>face</code>, <code>movement</code> 중 하나입니다.</td></tr>
+			<tr><td><code>strength.axis</code></td><td>AI가 반환한 내부 축입니다. 예: <code>emotion</code>, <code>speech</code>, <code>body</code>, <code>audience</code>.</td></tr>
 			<tr><td><code>strength.signal</code></td><td>관찰된 신호입니다.</td></tr>
 			<tr><td><code>strength.why</code></td><td>그 신호가 의도를 왜 뒷받침했는지 설명합니다.</td></tr>
 			<tr><td><code>strength.tier</code></td><td><code>execution</code>, <code>attempt</code>, <code>encouragement</code> 중 하나입니다.</td></tr>
 			<tr><td><code>focus.timecode</code></td><td>가장 중요한 단일 focus 구간입니다.</td></tr>
-			<tr><td><code>focus.axes</code></td><td>focus에 관련된 내부 축 목록입니다.</td></tr>
+			<tr><td><code>focus.axes</code></td><td>focus에 관련된 내부 축 목록입니다. 빈 값과 중복 값은 저장 전에 정리합니다.</td></tr>
 			<tr><td><code>focus.observedSignal</code></td><td>관찰된 신호입니다.</td></tr>
 			<tr><td><code>focus.rootCause</code></td><td>관찰 뒤의 근본 원인입니다.</td></tr>
 			<tr><td><code>focus.intentGap</code></td><td>배우 의도와 관객 인상 사이의 차이입니다.</td></tr>
@@ -471,6 +568,7 @@
 			</tbody>
 		</table>
 		<h3>acttub/web의 참고 소스 파일</h3>
+		<p>아래 파일들은 코칭 결과 구조와 분석 방향을 맞추기 위한 참고 자료입니다. 현재 백엔드 구현이 이 파일들의 다단계 파이프라인을 그대로 실행하지는 않습니다.</p>
 		<ul>
 			<li><code>web/src/server/coachAnalyze.ts</code></li>
 			<li><code>web/src/coach/personas.ts</code></li>
@@ -636,10 +734,11 @@
 
 	<section class="section">
 		<h2>저장</h2>
-		<p>구현은 나중에 결과 조회와 사용자 평가를 지원할 수 있도록 충분한 데이터를 저장해야 합니다.</p>
+		<p>구현은 생성 응답, 실패 추적, 사용자 평가 저장, 나중에 인증 기반 조회를 추가할 수 있도록 충분한 데이터를 저장합니다.</p>
 		<ul>
 			<li>Coaching 상태와 시간값</li>
 			<li>업로드된 영상 메타데이터</li>
+			<li>로컬 영상 저장 경로와 URI</li>
 			<li><code>performanceIntent</code></li>
 			<li>AI provider, 모델명, temperature, prompt version</li>
 			<li>AI 결과 필드: <code>sceneIntent</code>, <code>strength</code>, <code>focus</code>, <code>nextStep</code></li>
@@ -655,10 +754,59 @@
 			<span class="status ok">COMPLETED</span>
 			<span class="status fail">FAILED</span>
 		</div>
+		<h3>관계 시각화</h3>
+		<div class="schema-diagram">
+			<div class="schema-table">
+				<div class="schema-table-title">
+					<span>coachings</span>
+					<small>코칭 요청과 AI 분석 결과</small>
+				</div>
+				<ul class="schema-fields">
+					<li><span class="schema-key">PK</span><span><code>id</code></span></li>
+					<li><span>상태</span><span><code>status</code>, <code>created_at</code>, <code>updated_at</code>, <code>completed_at</code></span></li>
+					<li><span>입력</span><span><code>performance_intent</code>, 영상 메타데이터, 영상 저장 key/URI</span></li>
+					<li><span>AI 메타</span><span><code>ai_provider</code>, <code>ai_model</code>, <code>ai_temperature</code>, <code>ai_prompt_version</code></span></li>
+					<li><span>결과</span><span><code>sceneIntent</code>, <code>strength</code>, <code>focus</code>, <code>nextStep</code>의 단일 값 필드</span></li>
+					<li><span>실패</span><span><code>failure_code</code>, <code>failure_message</code></span></li>
+				</ul>
+			</div>
+			<div class="schema-side">
+				<div class="schema-table">
+					<div class="schema-table-title">
+						<span>coaching_focus_axes</span>
+						<small>코칭 1 : N 축</small>
+					</div>
+					<ul class="schema-fields">
+						<li><span class="schema-key">PK/FK</span><span><code>coaching_id</code></span></li>
+						<li><span class="schema-key">PK</span><span><code>axis_order</code></span></li>
+						<li><span>값</span><span><code>axis</code></span></li>
+						<li><span>제약</span><span><code>unique(coaching_id, axis)</code></span></li>
+					</ul>
+				</div>
+				<div class="schema-table">
+					<div class="schema-table-title">
+						<span>coaching_evaluations</span>
+						<small>코칭 1 : 0..1 평가</small>
+					</div>
+					<ul class="schema-fields">
+						<li><span class="schema-key">PK</span><span><code>id</code></span></li>
+						<li><span class="schema-key">FK</span><span><code>coaching_id</code></span></li>
+						<li><span>평가</span><span><code>rating</code>, <code>comment</code>, <code>created_at</code></span></li>
+						<li><span>제약</span><span><code>unique(coaching_id)</code>, <code>rating between 1 and 5</code></span></li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		<div class="relationship-note">
+			<code>coachings.id</code> 하나에 여러 개의 <code>coaching_focus_axes</code>가 연결되고, <code>coaching_evaluations</code>는 최대 하나만 연결됩니다.
+		</div>
 		<h3>Flyway migration 파일</h3>
 		<ul>
 			<li><code>V1__create_coachings.sql</code></li>
 			<li><code>V2__create_coaching_evaluations.sql</code></li>
+			<li><code>V3__add_video_storage_to_coachings.sql</code></li>
+			<li><code>V4__Normalize_coaching_focus_axes.java</code></li>
+			<li><code>V5__widen_coaching_short_result_columns.sql</code></li>
 		</ul>
 		<h3><code>coachings</code></h3>
 		<pre><code>create table coachings (
@@ -667,33 +815,49 @@
   video_original_filename varchar(255),
   video_content_type varchar(100),
   video_size_bytes bigint,
+  video_storage_key varchar(500),
+  video_storage_uri varchar(1000),
   performance_intent text not null,
   ai_provider varchar(50),
-  ai_model varchar(100),
+  ai_model varchar(200),
   ai_temperature decimal(4, 2),
-  ai_prompt_version varchar(50),
+  ai_prompt_version varchar(100),
   result_scene_intent text,
-  result_scene_intent_source varchar(30),
-  result_strength_timecode varchar(50),
-  result_strength_axis varchar(30),
+  result_scene_intent_source varchar(100),
+  result_strength_timecode varchar(100),
+  result_strength_axis varchar(100),
   result_strength_signal text,
   result_strength_why text,
-  result_strength_tier varchar(30),
-  result_focus_timecode varchar(50),
-  result_focus_axes json,
+  result_strength_tier varchar(100),
+  result_focus_timecode varchar(100),
   result_focus_observed_signal text,
   result_focus_root_cause text,
   result_focus_intent_gap text,
   result_focus_prescription text,
   result_next_step_text text,
-  result_next_step_action varchar(50),
+  result_next_step_action varchar(100),
   failure_code varchar(100),
   failure_message text,
   created_at datetime(6) not null,
   updated_at datetime(6) not null,
   completed_at datetime(6)
 );</code></pre>
-		<p><code>result_focus_axes</code>에는 MySQL <code>json</code> 타입을 사용합니다.</p>
+		<p><code>result_focus_axes</code> JSON 컬럼은 V4에서 제거하고, focus 축 목록은 별도 테이블로 정규화합니다.</p>
+		<h3><code>coaching_focus_axes</code></h3>
+		<pre><code>create table coaching_focus_axes (
+  coaching_id bigint not null,
+  axis_order int not null,
+  axis varchar(100) not null,
+
+  constraint pk_coaching_focus_axes
+    primary key (coaching_id, axis_order),
+
+  constraint fk_coaching_focus_axes_coaching
+    foreign key (coaching_id) references coachings(id),
+
+  constraint uq_coaching_focus_axes_axis
+    unique (coaching_id, axis)
+);</code></pre>
 		<h3><code>coaching_evaluations</code></h3>
 		<pre><code>create table coaching_evaluations (
   id bigint not null auto_increment primary key,

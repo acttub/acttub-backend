@@ -1,0 +1,16 @@
+.git
+.gradle
+build
+out
+.idea
+.vscode
+
+.env
+.env.*
+config
+storage
+
+*.iml
+*.iws
+*.ipr
+HELP.md
