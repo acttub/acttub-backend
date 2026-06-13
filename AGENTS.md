@@ -35,6 +35,8 @@ Use short, action-oriented commit messages such as `Add health check endpoint` o
 
 Pull requests should include a short summary, test results, and linked issues when available. Include request/response examples for API behavior changes. For branch flow and protection rules, see `docs/branching.md`.
 
+When opening a pull request, include Codex review guidance in the PR body or in a follow-up `@codex review` comment. Ask Codex to write the review in Korean. Prefer prompts that prioritize architecture boundaries, database migration safety, API contract consistency, service responsibility separation, missing tests, regression risk, and operational risk over style-only feedback.
+
 ## Security & Configuration Tips
 
 Do not commit secrets, credentials, local database dumps, or generated logs. Keep environment-specific settings outside tracked files when possible, and document required configuration in the PR or README.
