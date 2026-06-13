@@ -16,7 +16,6 @@ import com.loading.acttub_backend.global.api.ApiEnvelope;
 import com.loading.acttub_backend.global.api.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,11 +40,6 @@ public class CoachingController {
 			@RequestParam("performanceIntent") String performanceIntent
 	) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.create(toVideoInput(video), performanceIntent))));
-	}
-
-	@GetMapping("/api/v1/coachings/{coachingId}")
-	public ApiEnvelope<CoachingResponse> get(@PathVariable Long coachingId) {
-		return ApiEnvelope.data(toResponse(coachingService.get(coachingId)));
 	}
 
 	@PostMapping("/api/v1/coachings/{coachingId}/evaluation")

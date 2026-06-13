@@ -163,22 +163,11 @@ class CoachingApiIntegrationTest {
 	}
 
 	@Test
-	void getsCompletedCoaching() throws Exception {
+	void doesNotExposeStoredCoachingLookup() throws Exception {
 		String coachingId = createCoaching();
 
 		mockMvc.perform(get("/api/v1/coachings/{coachingId}", coachingId))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.coachingId").value(coachingId))
-				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
-				.andExpect(jsonPath("$.data.result.focus.prescription", notNullValue()));
-	}
-
-	@Test
-	void returnsNotFoundWhenGettingMissingCoaching() throws Exception {
-		mockMvc.perform(get("/api/v1/coachings/{coachingId}", 999999))
-				.andExpect(status().isNotFound())
-				.andExpect(jsonPath("$.error.code").value("COACHING_NOT_FOUND"))
-				.andExpect(jsonPath("$.error.details.coachingId").value("999999"));
+				.andExpect(status().isNotFound());
 	}
 
 	@Test
