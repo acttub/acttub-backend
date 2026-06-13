@@ -4,6 +4,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -67,7 +69,7 @@ public class V4__Normalize_coaching_focus_axes extends BaseJavaMigration {
 		}
 	}
 
-	private List<String> readAxes(String axesJson) throws Exception {
+	List<String> readAxes(String axesJson) throws Exception {
 		if (axesJson == null || axesJson.isBlank()) {
 			return List.of();
 		}
@@ -76,7 +78,21 @@ public class V4__Normalize_coaching_focus_axes extends BaseJavaMigration {
 		if (axes == null) {
 			return List.of();
 		}
-		return axes;
+		return normalizeAxes(axes);
+	}
+
+	private List<String> normalizeAxes(List<String> axes) {
+		LinkedHashSet<String> normalizedAxes = new LinkedHashSet<>();
+		for (String axis : axes) {
+			if (axis == null) {
+				continue;
+			}
+			String normalizedAxis = axis.trim();
+			if (!normalizedAxis.isBlank()) {
+				normalizedAxes.add(normalizedAxis);
+			}
+		}
+		return new ArrayList<>(normalizedAxes);
 	}
 
 	private void dropFocusAxesJsonColumn(Connection connection) throws Exception {

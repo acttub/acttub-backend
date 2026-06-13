@@ -3,6 +3,7 @@ package com.loading.acttub_backend.coaching.domain;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import jakarta.persistence.CollectionTable;
@@ -108,7 +109,7 @@ public class Coaching {
 		this.resultStrengthTier = feedback.strength().tier();
 		this.resultFocusTimecode = feedback.focus().timecode();
 		this.resultFocusAxes.clear();
-		this.resultFocusAxes.addAll(feedback.focus().axes());
+		this.resultFocusAxes.addAll(normalizeFocusAxes(feedback.focus().axes()));
 		this.resultFocusObservedSignal = feedback.focus().observedSignal();
 		this.resultFocusRootCause = feedback.focus().rootCause();
 		this.resultFocusIntentGap = feedback.focus().intentGap();
@@ -131,6 +132,24 @@ public class Coaching {
 		this.failureMessage = failureMessage;
 		this.updatedAt = now;
 		this.completedAt = now;
+	}
+
+	private List<String> normalizeFocusAxes(List<String> axes) {
+		if (axes == null) {
+			return List.of();
+		}
+
+		LinkedHashSet<String> normalizedAxes = new LinkedHashSet<>();
+		for (String axis : axes) {
+			if (axis == null) {
+				continue;
+			}
+			String normalizedAxis = axis.trim();
+			if (!normalizedAxis.isBlank()) {
+				normalizedAxes.add(normalizedAxis);
+			}
+		}
+		return new ArrayList<>(normalizedAxes);
 	}
 
 	public Long getId() {
