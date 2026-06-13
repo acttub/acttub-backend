@@ -9,6 +9,7 @@ import java.util.Set;
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.StoredVideo;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
+import com.loading.acttub_backend.coaching.application.port.CoachingAnalysisTimeoutException;
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalyzer;
 import com.loading.acttub_backend.coaching.application.port.CoachingRepository;
 import com.loading.acttub_backend.coaching.application.port.VideoStorage;
@@ -87,6 +88,15 @@ public class CoachingService {
 	private CoachingAnalysisResult analyze(Coaching coaching, VideoInput video, String performanceIntent) {
 		try {
 			return coachingAnalyzer.analyze(video, performanceIntent);
+		} catch (CoachingAnalysisTimeoutException e) {
+			coaching.fail("AI_ANALYSIS_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			throw new ApiException(
+					HttpStatus.GATEWAY_TIMEOUT,
+					"AI_ANALYSIS_TIMEOUT",
+					"Coaching analysis timed out.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
+			);
 		} catch (RuntimeException e) {
 			coaching.fail("AI_ANALYSIS_FAILED", e.getMessage(), OffsetDateTime.now(clock));
 			coachingRepository.saveAndFlush(coaching);
