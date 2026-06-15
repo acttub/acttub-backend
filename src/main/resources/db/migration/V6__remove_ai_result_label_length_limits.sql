@@ -17,4 +17,7 @@ alter table coachings
   modify column result_next_step_action text;
 
 alter table coaching_focus_axes
+  drop index uq_coaching_focus_axes_axis;
+
+alter table coaching_focus_axes
   modify column axis text not null;
