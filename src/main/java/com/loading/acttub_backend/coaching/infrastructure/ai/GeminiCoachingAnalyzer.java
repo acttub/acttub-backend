@@ -1,6 +1,7 @@
 package com.loading.acttub_backend.coaching.infrastructure.ai;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,8 +14,11 @@ import com.loading.acttub_backend.coaching.application.port.CoachingAnalysisTime
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalyzer;
 import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +32,8 @@ import org.springframework.web.client.RestClientResponseException;
 @Component
 @ConditionalOnProperty(name = "app.ai.coaching.stub-enabled", havingValue = "false", matchIfMissing = true)
 public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
+
+	private static final Logger log = LoggerFactory.getLogger(GeminiCoachingAnalyzer.class);
 
 	private final ObjectMapper objectMapper;
 	private final RestClient restClient;
@@ -61,8 +67,9 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 	@Override
 	public CoachingAnalysisResult analyze(VideoInput video, String performanceIntent) {
 		requireApiKey();
+		UploadedFile uploadedFile = null;
 		try {
-			UploadedFile uploadedFile = upload(video);
+			uploadedFile = upload(video);
 			waitUntilActive(uploadedFile);
 			String response = generate(uploadedFile, performanceIntent);
 			return new CoachingAnalysisResult("gemini", model, temperature, promptVersion, parseFeedback(response));
@@ -77,6 +84,8 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 			throw new IllegalStateException("Failed to read Gemini analysis response.", e);
 		} catch (RestClientException e) {
 			throw new IllegalStateException("Gemini analysis request failed.", e);
+		} finally {
+			deleteFile(uploadedFile);
 		}
 	}
 
@@ -98,15 +107,17 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 			throw new IllegalStateException("Gemini file upload URL was not returned.");
 		}
 
-		byte[] videoBytes = video.openStream().readAllBytes();
-		String fileResponse = restClient.post()
-				.uri(uploadUrl)
-				.header(HttpHeaders.CONTENT_LENGTH, String.valueOf(videoBytes.length))
-				.header("X-Goog-Upload-Offset", "0")
-				.header("X-Goog-Upload-Command", "upload, finalize")
-				.body(videoBytes)
-				.retrieve()
-				.body(String.class);
+		String fileResponse;
+		try (InputStream inputStream = video.openStream()) {
+			fileResponse = restClient.post()
+					.uri(uploadUrl)
+					.header(HttpHeaders.CONTENT_LENGTH, String.valueOf(video.sizeBytes()))
+					.header("X-Goog-Upload-Offset", "0")
+					.header("X-Goog-Upload-Command", "upload, finalize")
+					.body(new VideoInputResource(inputStream, video.sizeBytes(), displayName(video)))
+					.retrieve()
+					.body(String.class);
+		}
 
 		JsonNode file = objectMapper.readTree(fileResponse).path("file");
 		return new UploadedFile(
@@ -147,6 +158,21 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 		return root;
 	}
 
+	private void deleteFile(UploadedFile uploadedFile) {
+		if (uploadedFile == null || uploadedFile.name() == null || uploadedFile.name().isBlank()) {
+			return;
+		}
+		try {
+			restClient.delete()
+					.uri("/v1beta/" + uploadedFile.name())
+					.header("x-goog-api-key", apiKey)
+					.retrieve()
+					.toBodilessEntity();
+		} catch (RestClientException e) {
+			log.warn("Failed to delete Gemini uploaded file: {}", uploadedFile.name(), e);
+		}
+	}
+
 	private String generate(UploadedFile uploadedFile, String performanceIntent) {
 		return restClient.post()
 				.uri("/v1beta/models/{model}:generateContent", model)
@@ -177,27 +203,27 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 		JsonNode root = objectMapper.readTree(stripJsonFence(text));
 		return new CoachFeedback(
 				new CoachFeedback.SceneIntent(
-						text(root, "sceneIntent", "text"),
-						text(root, "sceneIntent", "source")
+						requiredText(root, "sceneIntent", "text"),
+						requiredText(root, "sceneIntent", "source")
 				),
 				new CoachFeedback.Strength(
-						text(root, "strength", "timecode"),
-						text(root, "strength", "axis"),
-						text(root, "strength", "signal"),
-						text(root, "strength", "why"),
-						text(root, "strength", "tier")
+						requiredText(root, "strength", "timecode"),
+						requiredText(root, "strength", "axis"),
+						requiredText(root, "strength", "signal"),
+						requiredText(root, "strength", "why"),
+						requiredText(root, "strength", "tier")
 				),
 				new CoachFeedback.Focus(
-						text(root, "focus", "timecode"),
-						axes(root.path("focus").path("axes")),
-						text(root, "focus", "observedSignal"),
-						text(root, "focus", "rootCause"),
-						text(root, "focus", "intentGap"),
-						text(root, "focus", "prescription")
+						requiredText(root, "focus", "timecode"),
+						requiredAxes(root, "focus", "axes"),
+						requiredText(root, "focus", "observedSignal"),
+						requiredText(root, "focus", "rootCause"),
+						requiredText(root, "focus", "intentGap"),
+						requiredText(root, "focus", "prescription")
 				),
 				new CoachFeedback.NextStep(
-						text(root, "nextStep", "text"),
-						text(root, "nextStep", "action")
+						requiredText(root, "nextStep", "text"),
+						requiredText(root, "nextStep", "action")
 				)
 		);
 	}
@@ -229,19 +255,34 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 				""".formatted(performanceIntent);
 	}
 
+	private List<String> requiredAxes(JsonNode root, String parent, String field) {
+		List<String> values = axes(root.path(parent).path(field));
+		if (values.isEmpty()) {
+			throw new IllegalStateException("Gemini response missing required field: " + parent + "." + field);
+		}
+		return values;
+	}
+
 	private List<String> axes(JsonNode axes) {
 		if (!axes.isArray()) {
 			return List.of();
 		}
 		List<String> values = new ArrayList<>();
 		for (JsonNode axis : axes) {
-			values.add(axis.asText(""));
+			String value = axis.asText("").trim();
+			if (!value.isBlank()) {
+				values.add(value);
+			}
 		}
 		return values;
 	}
 
-	private String text(JsonNode root, String parent, String field) {
-		return root.path(parent).path(field).asText("");
+	private String requiredText(JsonNode root, String parent, String field) {
+		String value = root.path(parent).path(field).asText("").trim();
+		if (value.isBlank()) {
+			throw new IllegalStateException("Gemini response missing required field: " + parent + "." + field);
+		}
+		return value;
 	}
 
 	private String stripJsonFence(String text) {
@@ -274,5 +315,27 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 	}
 
 	private record UploadedFile(String name, String uri, String mimeType) {
+	}
+
+	private static class VideoInputResource extends InputStreamResource {
+
+		private final long contentLength;
+		private final String filename;
+
+		VideoInputResource(InputStream inputStream, long contentLength, String filename) {
+			super(inputStream);
+			this.contentLength = contentLength;
+			this.filename = filename;
+		}
+
+		@Override
+		public long contentLength() {
+			return contentLength;
+		}
+
+		@Override
+		public String getFilename() {
+			return filename;
+		}
 	}
 }
