@@ -53,25 +53,25 @@ public class Coaching {
 
 	@Column(columnDefinition = "text")
 	private String resultSceneIntent;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String resultSceneIntentSource;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String resultStrengthTimecode;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String resultStrengthAxis;
 	@Column(columnDefinition = "text")
 	private String resultStrengthSignal;
 	@Column(columnDefinition = "text")
 	private String resultStrengthWhy;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String resultStrengthTier;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String resultFocusTimecode;
 
 	@ElementCollection
 	@CollectionTable(name = "coaching_focus_axes", joinColumns = @JoinColumn(name = "coaching_id"))
 	@OrderColumn(name = "axis_order")
-	@Column(name = "axis", nullable = false, length = 100)
+	@Column(name = "axis", nullable = false, columnDefinition = "text")
 	private List<String> resultFocusAxes = new ArrayList<>();
 
 	@Column(columnDefinition = "text")
@@ -84,7 +84,7 @@ public class Coaching {
 	private String resultFocusPrescription;
 	@Column(columnDefinition = "text")
 	private String resultNextStepText;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String resultNextStepAction;
 	@Column(length = 100)
 	private String failureCode;
