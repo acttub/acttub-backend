@@ -16,6 +16,21 @@ app:
   ai:
     coaching:
       stub-enabled: ${COACHING_STUB_ANALYZER_ENABLED:false}
+      gemini:
+        api-key: ${GEMINI_API_KEY:}
+        base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+        model: ${GEMINI_MODEL:gemini-3.5-flash}
+        temperature: ${GEMINI_TEMPERATURE:0}
+        prompt-version: ${GEMINI_PROMPT_VERSION:analysis-v0.2}
+        file-processing-timeout-millis: ${GEMINI_FILE_PROCESSING_TIMEOUT_MILLIS:180000}
   storage:
     video:
       root: ${VIDEO_STORAGE_ROOT:storage/videos}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha

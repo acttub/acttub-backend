@@ -7,6 +7,7 @@ import com.loading.acttub_backend.coaching.application.model.ApplicationExceptio
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -53,6 +54,15 @@ class ApiExceptionHandler {
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	ResponseEntity<ApiErrorEnvelope> handleUnreadableMessage() {
 		return invalidEvaluationRequest("body");
+	}
+
+	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+	ResponseEntity<ApiErrorEnvelope> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException exception) {
+		return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(ApiErrorEnvelope.error(
+				"UNSUPPORTED_MEDIA_TYPE",
+				"Unsupported media type.",
+				Map.of("contentType", String.valueOf(exception.getContentType()))
+		));
 	}
 
 	@ExceptionHandler(MethodArgumentTypeMismatchException.class)

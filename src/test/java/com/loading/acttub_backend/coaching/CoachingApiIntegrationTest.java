@@ -225,6 +225,30 @@ class CoachingApiIntegrationTest {
 				.andExpect(jsonPath("$.error.details.coachingId").value("abc"));
 	}
 
+	@Test
+	void rejectsUnsupportedCoachingContentTypeWithEnvelope() throws Exception {
+		mockMvc.perform(post("/api/v1/coachings")
+						.contentType("application/json")
+						.content("""
+								{
+								  "performanceIntent": "차분하지만 단호한 감정"
+								}
+								"""))
+				.andExpect(status().isUnsupportedMediaType())
+				.andExpect(jsonPath("$.error.code").value("UNSUPPORTED_MEDIA_TYPE"))
+				.andExpect(jsonPath("$.error.details.contentType").value("application/json"));
+	}
+
+	@Test
+	void rejectsUnsupportedEvaluationContentTypeWithEnvelope() throws Exception {
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/evaluation", 1)
+						.contentType("text/plain")
+						.content("rating=5"))
+				.andExpect(status().isUnsupportedMediaType())
+				.andExpect(jsonPath("$.error.code").value("UNSUPPORTED_MEDIA_TYPE"))
+				.andExpect(jsonPath("$.error.details.contentType").value("text/plain"));
+	}
+
 	private String createCoaching() throws Exception {
 		MvcResult result = mockMvc.perform(multipart("/api/v1/coachings")
 						.file(video("video/mp4"))
