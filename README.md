@@ -33,6 +33,8 @@ VIDEO_STORAGE_ROOT=/Users/insung/Desktop/acttub-video-storage
 
 PostgreSQL을 먼저 실행한 뒤 이미지를 빌드하고 컨테이너를 실행합니다. Docker 실행 시 DB URL은 스크립트에서 `host.docker.internal`로 덮어쓰고, 영상 저장 경로는 컨테이너 밖 호스트 디렉터리에 마운트합니다. 앱 시작 시 Flyway가 마이그레이션을 적용합니다.
 
+현재 앱은 PostgreSQL 전용 Flyway location인 `classpath:db/migration/postgresql`을 사용합니다. 기존 `db/migration`의 MySQL migration 파일은 이미 적용된 이력의 checksum을 보존하기 위해 수정하지 않습니다.
+
 ```bash
 docker build -t acttub-backend .
 ```

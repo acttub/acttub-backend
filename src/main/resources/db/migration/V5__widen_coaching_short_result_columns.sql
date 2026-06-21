@@ -1,26 +1,26 @@
 alter table coachings
-  alter column ai_model type text;
+  modify column ai_model varchar(200);
 
 alter table coachings
-  alter column ai_prompt_version type text;
+  modify column ai_prompt_version varchar(100);
 
 alter table coachings
-  alter column result_scene_intent_source type text;
+  modify column result_scene_intent_source varchar(100);
 
 alter table coachings
-  alter column result_strength_timecode type text;
+  modify column result_strength_timecode varchar(100);
 
 alter table coachings
-  alter column result_strength_axis type text;
+  modify column result_strength_axis varchar(100);
 
 alter table coachings
-  alter column result_strength_tier type text;
+  modify column result_strength_tier varchar(100);
 
 alter table coachings
-  alter column result_focus_timecode type text;
+  modify column result_focus_timecode varchar(100);
 
 alter table coachings
-  alter column result_next_step_action type text;
+  modify column result_next_step_action varchar(100);
 
 alter table coaching_focus_axes
-  alter column axis type text;
+  modify column axis varchar(100) not null;

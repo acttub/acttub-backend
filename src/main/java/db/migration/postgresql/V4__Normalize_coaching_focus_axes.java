@@ -1,4 +1,4 @@
-package db.migration;
+package db.migration.postgresql;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -31,7 +31,7 @@ public class V4__Normalize_coaching_focus_axes extends BaseJavaMigration {
 					create table coaching_focus_axes (
 					  coaching_id bigint not null,
 					  axis_order int not null,
-					  axis varchar(30) not null,
+					  axis text not null,
 
 					  constraint pk_coaching_focus_axes
 					    primary key (coaching_id, axis_order),
