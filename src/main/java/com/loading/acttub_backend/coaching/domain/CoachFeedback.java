@@ -3,28 +3,23 @@ package com.loading.acttub_backend.coaching.domain;
 import java.util.List;
 
 public record CoachFeedback(
-		SceneIntent sceneIntent,
-		Strength strength,
-		Focus focus,
-		NextStep nextStep
+		OverallStrength overallStrength,
+		List<FeedbackCard> feedbackCards
 ) {
 
-	public record SceneIntent(String text, String source) {
+	public record OverallStrength(String text) {
 	}
 
-	public record Strength(String timecode, String axis, String signal, String why, String tier) {
-	}
-
-	public record Focus(
-			String timecode,
-			List<String> axes,
-			String observedSignal,
-			String rootCause,
-			String intentGap,
-			String prescription
+	public record FeedbackCard(
+			int order,
+			String title,
+			List<Observation> observations,
+			String cause,
+			List<String> practiceSteps,
+			String expectedEffect
 	) {
 	}
 
-	public record NextStep(String text, String action) {
+	public record Observation(String timecode, String text) {
 	}
 }

@@ -13,6 +13,12 @@ public record CoachingResponse(
 		CoachFeedback result
 ) {
 
-	public record CoachingInput(String performanceIntent) {
+	public record CoachingInput(
+			String genre,
+			String customGenre,
+			String situation,
+			String characterSetting,
+			String subtext
+	) {
 	}
 }

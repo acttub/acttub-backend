@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -12,9 +11,13 @@ import org.junit.jupiter.api.Test;
 class CoachingTests {
 
 	@Test
-	void normalizesFocusAxesWhenCompleting() {
+	void completesWithCardFeedback() {
 		Coaching coaching = Coaching.analyzing(
-				"차분하지만 단호한 감정",
+				"영화",
+				null,
+				"헤어진 연인을 우연히 다시 만난 상황",
+				"감정을 쉽게 드러내지 않는 배우 지망생",
+				"아직 미련이 있지만 괜찮은 척한다",
 				"scene.mp4",
 				"video/mp4",
 				1024L,
@@ -27,20 +30,22 @@ class CoachingTests {
 				BigDecimal.ZERO,
 				"analysis-v0.1",
 				new CoachFeedback(
-						new CoachFeedback.SceneIntent("장면 의도", "actor_input"),
-						new CoachFeedback.Strength("0:48", "emotion", "좋은 신호", "좋은 이유", "execution"),
-						new CoachFeedback.Focus(
-								"0:00-0:15",
-								Arrays.asList(" emotion ", null, "speech", "emotion", "", "  "),
-								"관찰",
+						new CoachFeedback.OverallStrength("전체 강점"),
+						List.of(new CoachFeedback.FeedbackCard(
+								1,
+								"장면 의도",
+								List.of(new CoachFeedback.Observation("0:00-0:15", "관찰")),
 								"원인",
-								"차이",
-								"처방"
-						),
-						new CoachFeedback.NextStep("다음 단계", "retake_selected_range")
+								List.of("처방1", "처방2"),
+								"기대 효과"
+						))
 				)
 		), OffsetDateTime.parse("2026-06-13T00:01:00+09:00"));
 
-		assertThat(coaching.getResultFocusAxes()).containsExactly("emotion", "speech");
+		CoachFeedback feedback = coaching.getFeedback();
+
+		assertThat(feedback.overallStrength().text()).isEqualTo("전체 강점");
+		assertThat(feedback.feedbackCards()).hasSize(1);
+		assertThat(feedback.feedbackCards().getFirst().practiceSteps()).containsExactly("처방1", "처방2");
 	}
 }

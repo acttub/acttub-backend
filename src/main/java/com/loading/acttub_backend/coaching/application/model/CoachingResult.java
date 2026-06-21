@@ -9,7 +9,7 @@ public record CoachingResult(
 		String status,
 		OffsetDateTime createdAt,
 		OffsetDateTime completedAt,
-		String performanceIntent,
+		CoachingInput input,
 		CoachFeedback feedback
 ) {
 }

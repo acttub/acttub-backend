@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Acttub Backend API 요청/응답 명세</title>
+	<style>
+		:root {
+			color-scheme: light;
+			--text: #1f2937;
+			--muted: #64748b;
+			--line: #d7dee8;
+			--soft: #f6f8fb;
+			--accent: #0f6b7f;
+			--method: #155e75;
+		}
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			margin: 0;
+			color: var(--text);
+			background: #fff;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			line-height: 1.6;
+		}
+		main {
+			max-width: 1080px;
+			margin: 0 auto;
+			padding: 40px 24px 72px;
+		}
+		h1, h2, h3 {
+			margin: 0;
+			line-height: 1.25;
+		}
+		h1 {
+			font-size: 32px;
+			letter-spacing: 0;
+		}
+		h2 {
+			margin-top: 44px;
+			padding-bottom: 10px;
+			border-bottom: 1px solid var(--line);
+			font-size: 24px;
+		}
+		h3 {
+			margin-top: 28px;
+			font-size: 18px;
+		}
+		p, ul {
+			margin: 12px 0;
+		}
+		.lead {
+			color: var(--muted);
+		}
+		.endpoint {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+			align-items: center;
+		}
+		.method {
+			display: inline-block;
+			min-width: 54px;
+			padding: 3px 9px;
+			border-radius: 4px;
+			color: #fff;
+			background: var(--method);
+			font-size: 13px;
+			font-weight: 700;
+			text-align: center;
+		}
+		code {
+			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+			font-size: 0.93em;
+		}
+		pre {
+			overflow-x: auto;
+			margin: 14px 0 22px;
+			padding: 16px;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: var(--soft);
+		}
+		table {
+			width: 100%;
+			margin: 16px 0 24px;
+			border-collapse: collapse;
+			font-size: 14px;
+		}
+		th, td {
+			padding: 10px 12px;
+			border: 1px solid var(--line);
+			text-align: left;
+			vertical-align: top;
+		}
+		th {
+			background: var(--soft);
+			font-weight: 700;
+		}
+		.note {
+			padding: 12px 14px;
+			border-left: 4px solid var(--accent);
+			background: var(--soft);
+			color: #334155;
+		}
+	</style>
+</head>
+<body>
+<main>
+	<h1>Acttub Backend API 요청/응답 명세</h1>
+	<p class="lead">현재 코드의 Controller, DTO, Service 검증 로직, 전역 예외 핸들러, 통합 테스트를 기준으로 정리한 명세입니다.</p>
+
+	<h2>공통 규칙</h2>
+	<ul>
+		<li>성공 응답은 항상 <code>{"data": ...}</code> 래퍼를 사용합니다.</li>
+		<li>오류 응답은 항상 <code>{"error": {"code", "message", "details"}}</code> 래퍼를 사용합니다.</li>
+		<li>시간 필드는 <code>OffsetDateTime</code>으로 직렬화됩니다. 예: <code>2026-06-20T18:10:00+09:00</code></li>
+		<li>ID 필드는 응답에서 문자열로 내려갑니다. 예: <code>"coachingId": "1"</code></li>
+		<li>응답 본문은 JSON입니다.</li>
+	</ul>
+
+	<h3>성공 응답 래퍼</h3>
+	<pre><code>{
+  "data": {}
+}</code></pre>
+
+	<h3>오류 응답 래퍼</h3>
+	<pre><code>{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Error message.",
+    "details": {}
+  }
+}</code></pre>
+
+	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings</code></h2>
+	<p>연기 영상과 장면 맥락을 업로드해 코칭 피드백을 생성합니다.</p>
+
+	<h3>요청</h3>
+	<table>
+		<thead>
+		<tr>
+			<th>항목</th>
+			<th>값</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td>Content-Type</td>
+			<td><code>multipart/form-data</code></td>
+		</tr>
+		<tr>
+			<td>파일 크기 제한</td>
+			<td><code>100MB</code>, <code>104857600</code> bytes</td>
+		</tr>
+		<tr>
+			<td>허용 영상 MIME type</td>
+			<td><code>video/mp4</code>, <code>video/quicktime</code>, <code>video/webm</code></td>
+		</tr>
+		</tbody>
+	</table>
+
+	<p class="note">
+		iPhone 기본 카메라 영상은 보통 <code>.MOV</code> 파일이며 MIME type은 <code>video/quicktime</code>으로 들어옵니다.
+		고효율성 설정에서는 내부 코덱이 HEVC/H.265일 수 있습니다. Android 기본 카메라 영상은 보통 <code>.mp4</code> 파일이며 MIME type은 <code>video/mp4</code>입니다.
+	</p>
+
+	<table>
+		<thead>
+		<tr>
+			<th>필드</th>
+			<th>타입</th>
+			<th>필수</th>
+			<th>검증/정규화</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td><code>video</code></td>
+			<td>file</td>
+			<td>예</td>
+			<td>크기가 0보다 커야 하고, MIME type은 허용 목록 중 하나여야 합니다.</td>
+		</tr>
+		<tr>
+			<td><code>genre</code></td>
+			<td>string</td>
+			<td>예</td>
+			<td><code>연극</code>, <code>영화</code>, <code>뮤지컬</code>, <code>드라마</code>, <code>기타</code> 중 하나입니다. 앞뒤 공백은 제거됩니다.</td>
+		</tr>
+		<tr>
+			<td><code>customGenre</code></td>
+			<td>string</td>
+			<td>조건부</td>
+			<td><code>genre=기타</code>일 때 필수입니다. <code>genre</code>가 기타가 아니면 서버에서 <code>null</code>로 정규화합니다.</td>
+		</tr>
+		<tr>
+			<td><code>situation</code></td>
+			<td>string</td>
+			<td>예</td>
+			<td>장면 상황입니다. 앞뒤 공백 제거 후 빈 값이면 유효하지 않습니다.</td>
+		</tr>
+		<tr>
+			<td><code>characterSetting</code></td>
+			<td>string</td>
+			<td>예</td>
+			<td>인물 설정입니다. 앞뒤 공백 제거 후 빈 값이면 유효하지 않습니다.</td>
+		</tr>
+		<tr>
+			<td><code>subtext</code></td>
+			<td>string</td>
+			<td>아니오</td>
+			<td>서브텍스트입니다. 생략, 빈 문자열, 공백 문자열은 <code>null</code>로 정규화됩니다.</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<h3>요청 예시</h3>
+	<pre><code>curl -X POST http://localhost:8080/api/v1/coachings \
+  -F "video=@scene.mp4;type=video/mp4" \
+  -F "genre=영화" \
+  -F "situation=헤어진 연인을 우연히 다시 만난 상황" \
+  -F "characterSetting=감정을 쉽게 드러내지 않는 배우 지망생" \
+  -F "subtext=아직 미련이 있지만 괜찮은 척한다"</code></pre>
+
+	<h3>201 응답</h3>
+	<pre><code>{
+  "data": {
+    "coachingId": "1",
+    "status": "COMPLETED",
+    "createdAt": "2026-06-20T18:10:00+09:00",
+    "completedAt": "2026-06-20T18:10:12+09:00",
+    "input": {
+      "genre": "영화",
+      "customGenre": null,
+      "situation": "헤어진 연인을 우연히 다시 만난 상황",
+      "characterSetting": "감정을 쉽게 드러내지 않는 배우 지망생",
+      "subtext": "아직 미련이 있지만 괜찮은 척한다"
+    },
+    "result": {
+      "overallStrength": {
+        "text": "전반적으로, 감정을 바로 터뜨리지 않고 버티는 힘이 보여 장면의 진심이 살아났어요."
+      },
+      "feedbackCards": [
+        {
+          "order": 1,
+          "title": "도입부 긴장이 먼저 올라와 감정의 높이가 줄었어요",
+          "observations": [
+            {
+              "timecode": "0:00-0:15",
+              "text": "첫 대사 전부터 어깨와 목소리가 굳어 있었습니다."
+            }
+          ],
+          "cause": "장면을 잘 해내야 한다는 부담이 감정보다 먼저 몸을 방어 자세로 만들었어요.",
+          "practiceSteps": [
+            "촬영 직전 어깨를 귀까지 올렸다가 툭 떨어뜨리기 5회",
+            "첫 대사는 아직 괜찮은 사람처럼 시작하기"
+          ],
+          "expectedEffect": "그럼 감정이 처음부터 소진되지 않고 후반까지 더 선명하게 쌓여요."
+        }
+      ]
+    }
+  }
+}</code></pre>
+
+	<p class="note"><code>status</code>는 도메인 상태값이며 현재 응답 예시는 정상 완료 기준 <code>COMPLETED</code>입니다. 도메인에는 <code>ANALYZING</code>, <code>COMPLETED</code>, <code>FAILED</code>가 있습니다.</p>
+
+	<h3>오류 응답</h3>
+	<table>
+		<thead>
+		<tr>
+			<th>HTTP</th>
+			<th>code</th>
+			<th>message</th>
+			<th>details 예시</th>
+			<th>조건</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td>400</td>
+			<td><code>INVALID_COACHING_REQUEST</code></td>
+			<td><code>Invalid coaching request.</code></td>
+			<td><code>{"fields":["video","genre","customGenre","situation","characterSetting"]}</code></td>
+			<td>필수 multipart 필드가 없거나, 값이 비어 있거나, 허용 값/파일 조건을 만족하지 않습니다.</td>
+		</tr>
+		<tr>
+			<td>413</td>
+			<td><code>PAYLOAD_TOO_LARGE</code></td>
+			<td><code>Uploaded video is too large.</code></td>
+			<td><code>{"maxSizeBytes":104857600}</code></td>
+			<td>영상 또는 multipart 요청이 100MB를 초과합니다.</td>
+		</tr>
+		<tr>
+			<td>415</td>
+			<td><code>UNSUPPORTED_MEDIA_TYPE</code></td>
+			<td><code>Unsupported media type.</code></td>
+			<td><code>{"contentType":"application/json"}</code></td>
+			<td><code>multipart/form-data</code>가 아닌 요청입니다.</td>
+		</tr>
+		<tr>
+			<td>500</td>
+			<td><code>VIDEO_STORAGE_FAILED</code></td>
+			<td><code>Video storage failed.</code></td>
+			<td><code>{"coachingId":"{createdCoachingId}","status":"FAILED"}</code></td>
+			<td>영상 저장 중 예외가 발생했습니다. <code>coachingId</code>는 실패 전에 생성된 실제 코칭 ID입니다.</td>
+		</tr>
+		<tr>
+			<td>502</td>
+			<td><code>AI_ANALYSIS_FAILED</code></td>
+			<td><code>Coaching analysis failed.</code></td>
+			<td><code>{"coachingId":"{createdCoachingId}","status":"FAILED"}</code></td>
+			<td>AI 분석 중 예외가 발생했습니다. <code>coachingId</code>는 실패 전에 생성된 실제 코칭 ID입니다.</td>
+		</tr>
+		<tr>
+			<td>504</td>
+			<td><code>AI_ANALYSIS_TIMEOUT</code></td>
+			<td><code>Coaching analysis timed out.</code></td>
+			<td><code>{"coachingId":"{createdCoachingId}","status":"FAILED"}</code></td>
+			<td>AI 분석이 제한 시간 안에 끝나지 않았습니다. <code>coachingId</code>는 실패 전에 생성된 실제 코칭 ID입니다.</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings/{coachingId}/evaluation</code></h2>
+	<p>완료된 코칭 결과에 사용자 평가를 등록합니다. 코칭 하나당 평가는 한 번만 등록할 수 있습니다.</p>
+
+	<h3>요청</h3>
+	<table>
+		<thead>
+		<tr>
+			<th>항목</th>
+			<th>값</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td>Content-Type</td>
+			<td><code>application/json</code></td>
+		</tr>
+		<tr>
+			<td>Path variable</td>
+			<td><code>coachingId</code>: long</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<table>
+		<thead>
+		<tr>
+			<th>필드</th>
+			<th>타입</th>
+			<th>필수</th>
+			<th>검증/정규화</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td><code>rating</code></td>
+			<td>integer</td>
+			<td>예</td>
+			<td>1 이상 5 이하입니다.</td>
+		</tr>
+		<tr>
+			<td><code>comment</code></td>
+			<td>string</td>
+			<td>아니오</td>
+			<td><code>null</code>, 빈 문자열, 공백 문자열은 저장/응답 시 <code>null</code>로 정규화됩니다.</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<h3>요청 예시</h3>
+	<pre><code>{
+  "rating": 4,
+  "comment": "감정 흐름은 좋았고 발성 조언은 더 구체적이면 좋겠습니다."
+}</code></pre>
+
+	<h3>201 응답</h3>
+	<pre><code>{
+  "data": {
+    "evaluationId": "1",
+    "coachingId": "1",
+    "rating": 4,
+    "comment": "감정 흐름은 좋았고 발성 조언은 더 구체적이면 좋겠습니다.",
+    "createdAt": "2026-06-20T18:12:00+09:00"
+  }
+}</code></pre>
+
+	<h3>오류 응답</h3>
+	<table>
+		<thead>
+		<tr>
+			<th>HTTP</th>
+			<th>code</th>
+			<th>message</th>
+			<th>details 예시</th>
+			<th>조건</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td>400</td>
+			<td><code>INVALID_EVALUATION_REQUEST</code></td>
+			<td><code>Invalid evaluation request.</code></td>
+			<td><code>{"fields":["body","rating"]}</code></td>
+			<td>요청 본문이 없거나 JSON으로 읽을 수 없거나, <code>rating</code>이 없거나 1~5 범위를 벗어났습니다.</td>
+		</tr>
+		<tr>
+			<td>400</td>
+			<td><code>INVALID_COACHING_ID</code></td>
+			<td><code>Invalid coaching id.</code></td>
+			<td><code>{"coachingId":"abc"}</code></td>
+			<td><code>coachingId</code> path 값이 long으로 변환되지 않습니다.</td>
+		</tr>
+		<tr>
+			<td>404</td>
+			<td><code>COACHING_NOT_FOUND</code></td>
+			<td><code>Coaching not found.</code></td>
+			<td><code>{"coachingId":"999"}</code></td>
+			<td>해당 ID의 코칭이 없습니다.</td>
+		</tr>
+		<tr>
+			<td>409</td>
+			<td><code>COACHING_NOT_EVALUABLE</code></td>
+			<td><code>Only completed coachings can be evaluated.</code></td>
+			<td><code>{"coachingId":"{coachingId}","status":"FAILED"}</code></td>
+			<td>코칭 상태가 <code>COMPLETED</code>가 아닙니다.</td>
+		</tr>
+		<tr>
+			<td>409</td>
+			<td><code>COACHING_EVALUATION_ALREADY_EXISTS</code></td>
+			<td><code>Coaching evaluation already exists.</code></td>
+			<td><code>{"coachingId":"{coachingId}"}</code></td>
+			<td>이미 평가가 등록된 코칭입니다.</td>
+		</tr>
+		<tr>
+			<td>415</td>
+			<td><code>UNSUPPORTED_MEDIA_TYPE</code></td>
+			<td><code>Unsupported media type.</code></td>
+			<td><code>{"contentType":"text/plain"}</code></td>
+			<td><code>application/json</code>이 아닌 요청입니다.</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<h2>현재 구현되지 않은 조회 API</h2>
+	<ul>
+		<li><code>GET /api/v1/coachings/{coachingId}</code>는 Controller에 없으므로 404를 반환합니다.</li>
+	</ul>
+</main>
+</body>
+</html>

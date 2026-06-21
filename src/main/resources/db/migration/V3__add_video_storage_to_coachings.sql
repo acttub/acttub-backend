@@ -1,5 +1,5 @@
 alter table coachings
-  add column video_storage_key varchar(500);
+  add column video_storage_key text;
 
 alter table coachings
-  add column video_storage_uri varchar(1000);
+  add column video_storage_uri text;

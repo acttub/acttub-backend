@@ -47,7 +47,7 @@ class ApiExceptionHandler {
 		return ResponseEntity.status(413).body(ApiErrorEnvelope.error(
 				"PAYLOAD_TOO_LARGE",
 				"Uploaded video is too large.",
-				Map.of("maxSizeBytes", 314572800L)
+				Map.of("maxSizeBytes", 104857600L)
 		));
 	}
 
