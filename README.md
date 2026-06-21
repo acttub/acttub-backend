@@ -28,6 +28,7 @@ GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-3.5-flash
 GEMINI_PROMPT_VERSION=analysis-v0.3
 COACHING_STUB_ANALYZER_ENABLED=false
+APP_CORS_ALLOWED_ORIGINS=http://localhost:3000
 VIDEO_STORAGE_ROOT=/Users/insung/Desktop/acttub-video-storage
 ```
 
@@ -60,6 +61,7 @@ DB_USERNAME=acttub \
 DB_PASSWORD='your-db-password' \
 VIDEO_STORAGE_ROOT=/var/lib/acttub/videos \
 GEMINI_API_KEY='your-gemini-api-key' \
+APP_CORS_ALLOWED_ORIGINS='https://acttub.com' \
 java -jar build/libs/acttub-backend-0.0.1-SNAPSHOT.jar
 ```
 
