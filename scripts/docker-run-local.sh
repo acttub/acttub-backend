@@ -26,6 +26,7 @@ fi
 docker stop acttub-backend >/dev/null 2>&1 || true
 
 docker run --rm -d --name acttub-backend \
+	--add-host=host.docker.internal:host-gateway \
 	-p 8080:8080 \
 	--env-file .env \
 	-e SPRING_PROFILES_ACTIVE=local \
