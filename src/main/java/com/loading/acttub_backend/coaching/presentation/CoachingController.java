@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
+import com.loading.acttub_backend.coaching.application.model.CoachingInput;
 import com.loading.acttub_backend.coaching.application.model.EvaluationCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationResult;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
@@ -43,16 +44,25 @@ public class CoachingController {
 	@PostMapping(value = "/api/v1/coachings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@Operation(
 			summary = "코칭 피드백 생성",
-			description = "연기 영상을 업로드하고 연기 의도를 함께 전달해 코칭 분석 결과를 생성합니다."
+			description = "연기 영상과 장르, 상황, 인물 설정, 선택 서브텍스트를 전달해 코칭 피드백 카드를 생성합니다."
 	)
 	@ApiResponse(responseCode = "201", description = "코칭 피드백 생성 완료")
 	public ResponseEntity<ApiEnvelope<CoachingResponse>> create(
-			@Parameter(description = "업로드할 연기 영상 파일")
+			@Parameter(description = "업로드할 연기 영상 파일. 허용 MIME type: video/mp4, video/quicktime, video/webm")
 			@RequestParam("video") MultipartFile video,
-			@Parameter(description = "사용자가 의도한 연기 방향")
-			@RequestParam("performanceIntent") String performanceIntent
+			@Parameter(description = "장르. 연극, 영화, 뮤지컬, 드라마, 기타 중 하나")
+			@RequestParam("genre") String genre,
+			@Parameter(description = "장르가 기타일 때 입력하는 사용자 지정 장르")
+			@RequestParam(value = "customGenre", required = false) String customGenre,
+			@Parameter(description = "장면 상황")
+			@RequestParam("situation") String situation,
+			@Parameter(description = "인물 설정")
+			@RequestParam("characterSetting") String characterSetting,
+			@Parameter(description = "서브텍스트. 생략 가능")
+			@RequestParam(value = "subtext", required = false) String subtext
 	) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.create(toVideoInput(video), performanceIntent))));
+		CoachingInput input = new CoachingInput(genre, customGenre, situation, characterSetting, subtext);
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.create(toVideoInput(video), input))));
 	}
 
 	@PostMapping(value = "/api/v1/coachings/{coachingId}/evaluation", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -84,7 +94,13 @@ public class CoachingController {
 				result.status(),
 				result.createdAt(),
 				result.completedAt(),
-				new CoachingResponse.CoachingInput(result.performanceIntent()),
+				new CoachingResponse.CoachingInput(
+						result.input().genreLabel(),
+						result.input().customGenre(),
+						result.input().situation(),
+						result.input().characterSetting(),
+						result.input().subtext()
+				),
 				result.feedback()
 		);
 	}

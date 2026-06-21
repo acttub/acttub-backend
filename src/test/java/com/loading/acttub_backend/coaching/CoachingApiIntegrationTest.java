@@ -27,6 +27,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,15 +54,35 @@ class CoachingApiIntegrationTest {
 	void createsCompletedCoachingWithAiResult() throws Exception {
 		MockMultipartFile video = video("video/mp4");
 
-		mockMvc.perform(multipart("/api/v1/coachings")
-						.file(video)
-						.param("performanceIntent", "차분하지만 단호한 감정"))
+		mockMvc.perform(coachingRequest(video))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.coachingId", notNullValue()))
 				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
-				.andExpect(jsonPath("$.data.input.performanceIntent").value("차분하지만 단호한 감정"))
-				.andExpect(jsonPath("$.data.result.sceneIntent.text", notNullValue()))
-				.andExpect(jsonPath("$.data.result.focus.prescription", notNullValue()));
+				.andExpect(jsonPath("$.data.input.genre").value("영화"))
+				.andExpect(jsonPath("$.data.input.situation").value("헤어진 연인을 우연히 다시 만난 상황"))
+				.andExpect(jsonPath("$.data.input.characterSetting").value("감정을 쉽게 드러내지 않는 배우 지망생"))
+				.andExpect(jsonPath("$.data.input.subtext").value("아직 미련이 있지만 괜찮은 척한다"))
+				.andExpect(jsonPath("$.data.result.overallStrength.text", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].title", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].observations[0].timecode", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].cause", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].practiceSteps[0]", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect", notNullValue()));
+	}
+
+	@Test
+	void createsCoachingWithCustomGenre() throws Exception {
+		mockMvc.perform(coachingRequest(video("video/mp4"), "기타", "웹드라마"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.input.genre").value("기타"))
+				.andExpect(jsonPath("$.data.input.customGenre").value("웹드라마"));
+	}
+
+	@Test
+	void createsCoachingWithoutSubtext() throws Exception {
+		mockMvc.perform(coachingRequestWithoutSubtext(video("video/mp4")))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.input.subtext").doesNotExist());
 	}
 
 	@Test
@@ -73,9 +94,7 @@ class CoachingApiIntegrationTest {
 				"stored-video".getBytes(StandardCharsets.UTF_8)
 		);
 
-		MvcResult result = mockMvc.perform(multipart("/api/v1/coachings")
-						.file(video)
-						.param("performanceIntent", "차분하지만 단호한 감정"))
+		MvcResult result = mockMvc.perform(coachingRequest(video))
 				.andExpect(status().isCreated())
 				.andReturn();
 
@@ -88,22 +107,55 @@ class CoachingApiIntegrationTest {
 	}
 
 	@Test
-	void storesFocusAxesAsNormalizedRows() throws Exception {
+	void doesNotKeepLegacyFocusAxesTable() {
+		Integer tableCount = jdbcTemplate.queryForObject(
+				"select count(*) from information_schema.tables where table_name = 'COACHING_FOCUS_AXES'",
+				Integer.class
+		);
+
+		assertThat(tableCount).isZero();
+	}
+
+	@Test
+	void storesFeedbackCardsAsNormalizedRows() throws Exception {
 		String coachingId = createCoaching();
 
-		List<String> axes = jdbcTemplate.queryForList(
-				"select axis from coaching_focus_axes where coaching_id = ? order by axis_order",
+		List<String> cardTitles = jdbcTemplate.queryForList(
+				"select title from coaching_feedback_cards where coaching_id = ? order by card_order",
+				String.class,
+				Long.valueOf(coachingId)
+		);
+		List<String> observations = jdbcTemplate.queryForList(
+				"""
+						select o.text
+						from coaching_feedback_observations o
+						join coaching_feedback_cards c on c.id = o.feedback_card_id
+						where c.coaching_id = ?
+						order by c.card_order, o.observation_order
+						""",
+				String.class,
+				Long.valueOf(coachingId)
+		);
+		List<String> practiceSteps = jdbcTemplate.queryForList(
+				"""
+						select s.text
+						from coaching_practice_steps s
+						join coaching_feedback_cards c on c.id = s.feedback_card_id
+						where c.coaching_id = ?
+						order by c.card_order, s.step_order
+						""",
 				String.class,
 				Long.valueOf(coachingId)
 		);
 
-		assertThat(axes).containsExactly("emotion", "speech");
+		assertThat(cardTitles).hasSize(1);
+		assertThat(observations).hasSize(2);
+		assertThat(practiceSteps).hasSize(3);
 	}
 
 	@Test
 	void rejectsCoachingRequestWithoutVideo() throws Exception {
-		mockMvc.perform(multipart("/api/v1/coachings")
-						.param("performanceIntent", "차분하지만 단호한 감정"))
+		mockMvc.perform(coachingRequest())
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_COACHING_REQUEST"))
 				.andExpect(jsonPath("$.error.details.fields[0]").value("video"));
@@ -113,9 +165,7 @@ class CoachingApiIntegrationTest {
 	void rejectsUnsupportedVideoContentType() throws Exception {
 		MockMultipartFile video = video("text/plain");
 
-		mockMvc.perform(multipart("/api/v1/coachings")
-						.file(video)
-						.param("performanceIntent", "차분하지만 단호한 감정"))
+		mockMvc.perform(coachingRequest(video))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_COACHING_REQUEST"))
 				.andExpect(jsonPath("$.error.details.fields[0]").value("video"));
@@ -131,16 +181,30 @@ class CoachingApiIntegrationTest {
 		) {
 			@Override
 			public long getSize() {
-				return 314572801L;
+				return 104857601L;
 			}
 		};
 
-		mockMvc.perform(multipart("/api/v1/coachings")
-						.file(video)
-						.param("performanceIntent", "차분하지만 단호한 감정"))
+		mockMvc.perform(coachingRequest(video))
 				.andExpect(status().isPayloadTooLarge())
 				.andExpect(jsonPath("$.error.code").value("PAYLOAD_TOO_LARGE"))
-				.andExpect(jsonPath("$.error.details.maxSizeBytes").value(314572800));
+				.andExpect(jsonPath("$.error.details.maxSizeBytes").value(104857600));
+	}
+
+	@Test
+	void rejectsUnsupportedGenre() throws Exception {
+		mockMvc.perform(coachingRequest(video("video/mp4"), "광고", null))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_COACHING_REQUEST"))
+				.andExpect(jsonPath("$.error.details.fields[0]").value("genre"));
+	}
+
+	@Test
+	void rejectsCustomGenreMissingWhenGenreIsEtc() throws Exception {
+		mockMvc.perform(coachingRequest(video("video/mp4"), "기타", null))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_COACHING_REQUEST"))
+				.andExpect(jsonPath("$.error.details.fields[0]").value("customGenre"));
 	}
 
 	@Test
@@ -231,7 +295,10 @@ class CoachingApiIntegrationTest {
 						.contentType("application/json")
 						.content("""
 								{
-								  "performanceIntent": "차분하지만 단호한 감정"
+								  "genre": "영화",
+								  "situation": "헤어진 연인을 우연히 다시 만난 상황",
+								  "characterSetting": "감정을 쉽게 드러내지 않는 배우 지망생",
+								  "subtext": "아직 미련이 있지만 괜찮은 척한다"
 								}
 								"""))
 				.andExpect(status().isUnsupportedMediaType())
@@ -250,9 +317,7 @@ class CoachingApiIntegrationTest {
 	}
 
 	private String createCoaching() throws Exception {
-		MvcResult result = mockMvc.perform(multipart("/api/v1/coachings")
-						.file(video("video/mp4"))
-						.param("performanceIntent", "차분하지만 단호한 감정"))
+		MvcResult result = mockMvc.perform(coachingRequest(video("video/mp4")))
 				.andExpect(status().isCreated())
 				.andReturn();
 		return JsonPath.read(result.getResponse().getContentAsString(), "$.data.coachingId");
@@ -276,6 +341,39 @@ class CoachingApiIntegrationTest {
 				contentType,
 			"fake-video".getBytes(StandardCharsets.UTF_8)
 	);
+	}
+
+	private MockMultipartHttpServletRequestBuilder coachingRequest() {
+		return coachingRequest("영화", null);
+	}
+
+	private MockMultipartHttpServletRequestBuilder coachingRequest(String genre, String customGenre) {
+		MockMultipartHttpServletRequestBuilder builder = multipart("/api/v1/coachings");
+		builder.param("genre", genre);
+		builder.param("situation", "헤어진 연인을 우연히 다시 만난 상황");
+		builder.param("characterSetting", "감정을 쉽게 드러내지 않는 배우 지망생");
+		builder.param("subtext", "아직 미련이 있지만 괜찮은 척한다");
+		if (customGenre != null) {
+			builder.param("customGenre", customGenre);
+		}
+		return builder;
+	}
+
+	private MockMultipartHttpServletRequestBuilder coachingRequest(MockMultipartFile video) {
+		return coachingRequest().file(video);
+	}
+
+	private MockMultipartHttpServletRequestBuilder coachingRequest(MockMultipartFile video, String genre, String customGenre) {
+		return coachingRequest(genre, customGenre).file(video);
+	}
+
+	private MockMultipartHttpServletRequestBuilder coachingRequestWithoutSubtext(MockMultipartFile video) {
+		MockMultipartHttpServletRequestBuilder builder = multipart("/api/v1/coachings");
+		builder.file(video);
+		builder.param("genre", "영화");
+		builder.param("situation", "헤어진 연인을 우연히 다시 만난 상황");
+		builder.param("characterSetting", "감정을 쉽게 드러내지 않는 배우 지망생");
+		return builder;
 	}
 
 	private static Path createTempDirectory() {

@@ -2,11 +2,13 @@ package com.loading.acttub_backend.coaching.application.service;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import com.loading.acttub_backend.coaching.application.model.ApplicationException;
+import com.loading.acttub_backend.coaching.application.model.CoachingInput;
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.StoredVideo;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
@@ -24,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CoachingService {
 
-	private static final long MAX_VIDEO_SIZE_BYTES = 314572800L;
+	private static final long MAX_VIDEO_SIZE_BYTES = 104857600L;
 	private static final Set<String> ALLOWED_VIDEO_CONTENT_TYPES = Set.of(
 			"video/mp4",
 			"video/quicktime",
@@ -44,21 +46,25 @@ public class CoachingService {
 	}
 
 	@Transactional(noRollbackFor = ApplicationException.class)
-	public CoachingResult create(VideoInput video, String performanceIntent) {
-		validate(video, performanceIntent);
+	public CoachingResult create(VideoInput video, CoachingInput input) {
+		validate(video, input);
 
-		Coaching coaching = createAnalyzingCoaching(video, performanceIntent);
+		Coaching coaching = createAnalyzingCoaching(video, input);
 		storeVideo(coaching, video);
-		CoachingAnalysisResult analysisResult = analyze(coaching, video, performanceIntent);
+		CoachingAnalysisResult analysisResult = analyze(coaching, video, input);
 
 		coaching.complete(analysisResult, OffsetDateTime.now(clock));
-		return toResponse(coaching);
+		return toResponse(coaching, analysisResult.feedback());
 	}
 
-	private Coaching createAnalyzingCoaching(VideoInput video, String performanceIntent) {
+	private Coaching createAnalyzingCoaching(VideoInput video, CoachingInput input) {
 		OffsetDateTime now = OffsetDateTime.now(clock);
 		Coaching coaching = Coaching.analyzing(
-				performanceIntent,
+				input.genreLabel(),
+				input.customGenre(),
+				input.situation(),
+				input.characterSetting(),
+				input.subtext(),
 				video.originalFilename(),
 				video.contentType(),
 				video.sizeBytes(),
@@ -83,9 +89,9 @@ public class CoachingService {
 		}
 	}
 
-	private CoachingAnalysisResult analyze(Coaching coaching, VideoInput video, String performanceIntent) {
+	private CoachingAnalysisResult analyze(Coaching coaching, VideoInput video, CoachingInput input) {
 		try {
-			return coachingAnalyzer.analyze(video, performanceIntent);
+			return coachingAnalyzer.analyze(video, input);
 		} catch (CoachingAnalysisTimeoutException e) {
 			coaching.fail("AI_ANALYSIS_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
 			coachingRepository.saveAndFlush(coaching);
@@ -106,35 +112,27 @@ public class CoachingService {
 	}
 
 	private CoachingResult toResponse(Coaching coaching) {
+		return toResponse(coaching, coaching.getFeedback());
+	}
+
+	private CoachingResult toResponse(Coaching coaching, CoachFeedback feedback) {
 		return new CoachingResult(
 				String.valueOf(coaching.getId()),
 				coaching.getStatus().name(),
 				coaching.getCreatedAt(),
 				coaching.getCompletedAt(),
-				coaching.getPerformanceIntent(),
-				new CoachFeedback(
-						new CoachFeedback.SceneIntent(coaching.getResultSceneIntent(), coaching.getResultSceneIntentSource()),
-						new CoachFeedback.Strength(
-								coaching.getResultStrengthTimecode(),
-								coaching.getResultStrengthAxis(),
-								coaching.getResultStrengthSignal(),
-								coaching.getResultStrengthWhy(),
-								coaching.getResultStrengthTier()
-						),
-						new CoachFeedback.Focus(
-								coaching.getResultFocusTimecode(),
-								coaching.getResultFocusAxes(),
-								coaching.getResultFocusObservedSignal(),
-								coaching.getResultFocusRootCause(),
-								coaching.getResultFocusIntentGap(),
-								coaching.getResultFocusPrescription()
-						),
-						new CoachFeedback.NextStep(coaching.getResultNextStepText(), coaching.getResultNextStepAction())
-				)
+				new CoachingInput(
+						coaching.getGenre(),
+						coaching.getCustomGenre(),
+						coaching.getSituation(),
+						coaching.getCharacterSetting(),
+						coaching.getSubtext()
+				),
+				feedback
 		);
 	}
 
-	private void validate(VideoInput video, String performanceIntent) {
+	private void validate(VideoInput video, CoachingInput input) {
 		if (video == null || video.sizeBytes() == 0 || !ALLOWED_VIDEO_CONTENT_TYPES.contains(video.contentType())) {
 			throw new ApplicationException(
 					"INVALID_COACHING_REQUEST",
@@ -142,11 +140,12 @@ public class CoachingService {
 					Map.of("fields", List.of("video"))
 			);
 		}
-		if (performanceIntent == null || performanceIntent.isBlank()) {
+		List<String> invalidFields = invalidInputFields(input);
+		if (!invalidFields.isEmpty()) {
 			throw new ApplicationException(
 					"INVALID_COACHING_REQUEST",
 					"Invalid coaching request.",
-					Map.of("fields", List.of("performanceIntent"))
+					Map.of("fields", invalidFields)
 			);
 		}
 		if (video.sizeBytes() > MAX_VIDEO_SIZE_BYTES) {
@@ -156,5 +155,26 @@ public class CoachingService {
 					Map.of("maxSizeBytes", MAX_VIDEO_SIZE_BYTES)
 			);
 		}
+	}
+
+	private List<String> invalidInputFields(CoachingInput input) {
+		if (input == null) {
+			return List.of("input");
+		}
+
+		List<String> invalidFields = new ArrayList<>();
+		if (!input.hasAllowedGenre()) {
+			invalidFields.add("genre");
+		}
+		if (input.requiresCustomGenre() && input.customGenre() == null) {
+			invalidFields.add("customGenre");
+		}
+		if (input.situation() == null) {
+			invalidFields.add("situation");
+		}
+		if (input.characterSetting() == null) {
+			invalidFields.add("characterSetting");
+		}
+		return invalidFields;
 	}
 }

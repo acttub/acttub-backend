@@ -39,7 +39,11 @@ class EvaluationServiceTests {
 
 	private Coaching completedCoaching() {
 		Coaching coaching = Coaching.analyzing(
-				"차분하지만 단호한 감정",
+				"영화",
+				null,
+				"헤어진 연인을 우연히 다시 만난 상황",
+				"감정을 쉽게 드러내지 않는 배우 지망생",
+				"아직 미련이 있지만 괜찮은 척한다",
 				"scene.mp4",
 				"video/mp4",
 				1024L,
@@ -51,10 +55,15 @@ class EvaluationServiceTests {
 				BigDecimal.ZERO,
 				"analysis-v0.1",
 				new CoachFeedback(
-						new CoachFeedback.SceneIntent("장면 의도", "actor_input"),
-						new CoachFeedback.Strength("0:48", "emotion", "좋은 신호", "좋은 이유", "execution"),
-						new CoachFeedback.Focus("0:00-0:15", List.of("emotion"), "관찰", "원인", "차이", "처방"),
-						new CoachFeedback.NextStep("다음 단계", "retake_selected_range")
+						new CoachFeedback.OverallStrength("전체 강점"),
+						List.of(new CoachFeedback.FeedbackCard(
+								1,
+								"장면 의도",
+								List.of(new CoachFeedback.Observation("0:00-0:15", "관찰")),
+								"원인",
+								List.of("처방"),
+								"기대 효과"
+						))
 				)
 		), OffsetDateTime.parse("2026-06-13T00:01:00+09:00"));
 		return coaching;

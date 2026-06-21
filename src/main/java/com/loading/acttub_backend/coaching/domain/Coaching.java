@@ -3,12 +3,9 @@ package com.loading.acttub_backend.coaching.domain;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -16,6 +13,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
@@ -28,28 +26,45 @@ public class Coaching {
 	private Long id;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 30)
+	@Column(nullable = false, columnDefinition = "text")
 	private CoachingStatus status;
 
+	@Column(columnDefinition = "text")
 	private String videoOriginalFilename;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String videoContentType;
 	private Long videoSizeBytes;
-	@Column(length = 500)
+	@Column(columnDefinition = "text")
 	private String videoStorageKey;
-	@Column(length = 1000)
+	@Column(columnDefinition = "text")
 	private String videoStorageUri;
 
-	@Column(nullable = false, columnDefinition = "text")
-	private String performanceIntent;
+	@Column(columnDefinition = "text")
+	private String genre;
+	@Column(columnDefinition = "text")
+	private String customGenre;
+	@Column(columnDefinition = "text")
+	private String situation;
+	@Column(columnDefinition = "text")
+	private String characterSetting;
+	@Column(columnDefinition = "text")
+	private String subtext;
 
-	@Column(length = 50)
+	@Column(columnDefinition = "text")
 	private String aiProvider;
-	@Column(length = 200)
+	@Column(columnDefinition = "text")
 	private String aiModel;
 	private BigDecimal aiTemperature;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String aiPromptVersion;
+
+	@Column(columnDefinition = "text")
+	private String resultOverallStrengthText;
+
+	@OneToMany(cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+	@JoinColumn(name = "coaching_id", nullable = false)
+	@OrderColumn(name = "card_order")
+	private List<CoachingFeedbackCard> feedbackCards = new ArrayList<>();
 
 	@Column(columnDefinition = "text")
 	private String resultSceneIntent;
@@ -68,12 +83,6 @@ public class Coaching {
 	@Column(columnDefinition = "text")
 	private String resultFocusTimecode;
 
-	@ElementCollection
-	@CollectionTable(name = "coaching_focus_axes", joinColumns = @JoinColumn(name = "coaching_id"))
-	@OrderColumn(name = "axis_order")
-	@Column(name = "axis", nullable = false, columnDefinition = "text")
-	private List<String> resultFocusAxes = new ArrayList<>();
-
 	@Column(columnDefinition = "text")
 	private String resultFocusObservedSignal;
 	@Column(columnDefinition = "text")
@@ -86,7 +95,7 @@ public class Coaching {
 	private String resultNextStepText;
 	@Column(columnDefinition = "text")
 	private String resultNextStepAction;
-	@Column(length = 100)
+	@Column(columnDefinition = "text")
 	private String failureCode;
 	@Column(columnDefinition = "text")
 	private String failureMessage;
@@ -102,11 +111,16 @@ public class Coaching {
 	protected Coaching() {
 	}
 
-	public static Coaching analyzing(String performanceIntent, String originalFilename, String contentType, long sizeBytes,
+	public static Coaching analyzing(String genre, String customGenre, String situation, String characterSetting,
+			String subtext, String originalFilename, String contentType, long sizeBytes,
 			OffsetDateTime now) {
 		Coaching coaching = new Coaching();
 		coaching.status = CoachingStatus.ANALYZING;
-		coaching.performanceIntent = performanceIntent;
+		coaching.genre = genre;
+		coaching.customGenre = customGenre;
+		coaching.situation = situation;
+		coaching.characterSetting = characterSetting;
+		coaching.subtext = subtext;
 		coaching.videoOriginalFilename = originalFilename;
 		coaching.videoContentType = contentType;
 		coaching.videoSizeBytes = sizeBytes;
@@ -117,27 +131,32 @@ public class Coaching {
 
 	public void complete(CoachingAnalysisResult analysisResult, OffsetDateTime now) {
 		CoachFeedback feedback = analysisResult.feedback();
+		CoachFeedback.FeedbackCard primaryCard = firstFeedbackCard(feedback);
+		CoachFeedback.Observation primaryObservation = firstObservation(primaryCard);
 		this.status = CoachingStatus.COMPLETED;
 		this.aiProvider = analysisResult.provider();
 		this.aiModel = analysisResult.model();
 		this.aiTemperature = analysisResult.temperature();
 		this.aiPromptVersion = analysisResult.promptVersion();
-		this.resultSceneIntent = feedback.sceneIntent().text();
-		this.resultSceneIntentSource = feedback.sceneIntent().source();
-		this.resultStrengthTimecode = feedback.strength().timecode();
-		this.resultStrengthAxis = feedback.strength().axis();
-		this.resultStrengthSignal = feedback.strength().signal();
-		this.resultStrengthWhy = feedback.strength().why();
-		this.resultStrengthTier = feedback.strength().tier();
-		this.resultFocusTimecode = feedback.focus().timecode();
-		this.resultFocusAxes.clear();
-		this.resultFocusAxes.addAll(normalizeFocusAxes(feedback.focus().axes()));
-		this.resultFocusObservedSignal = feedback.focus().observedSignal();
-		this.resultFocusRootCause = feedback.focus().rootCause();
-		this.resultFocusIntentGap = feedback.focus().intentGap();
-		this.resultFocusPrescription = feedback.focus().prescription();
-		this.resultNextStepText = feedback.nextStep().text();
-		this.resultNextStepAction = feedback.nextStep().action();
+		this.resultOverallStrengthText = feedback.overallStrength().text();
+		this.feedbackCards.clear();
+		this.feedbackCards.addAll(feedback.feedbackCards().stream()
+				.map(CoachingFeedbackCard::new)
+				.toList());
+		this.resultSceneIntent = primaryCard.title();
+		this.resultSceneIntentSource = "actor_input";
+		this.resultStrengthTimecode = null;
+		this.resultStrengthAxis = null;
+		this.resultStrengthSignal = resultOverallStrengthText;
+		this.resultStrengthWhy = null;
+		this.resultStrengthTier = null;
+		this.resultFocusTimecode = primaryObservation.timecode();
+		this.resultFocusObservedSignal = primaryObservation.text();
+		this.resultFocusRootCause = primaryCard.cause();
+		this.resultFocusIntentGap = primaryCard.expectedEffect();
+		this.resultFocusPrescription = String.join("\n", primaryCard.practiceSteps());
+		this.resultNextStepText = primaryCard.expectedEffect();
+		this.resultNextStepAction = "retake_selected_range";
 		this.completedAt = now;
 		this.updatedAt = now;
 	}
@@ -156,22 +175,18 @@ public class Coaching {
 		this.completedAt = now;
 	}
 
-	private List<String> normalizeFocusAxes(List<String> axes) {
-		if (axes == null) {
-			return List.of();
+	private CoachFeedback.FeedbackCard firstFeedbackCard(CoachFeedback feedback) {
+		if (feedback.feedbackCards() == null || feedback.feedbackCards().isEmpty()) {
+			throw new IllegalArgumentException("Feedback card is required.");
 		}
+		return feedback.feedbackCards().getFirst();
+	}
 
-		LinkedHashSet<String> normalizedAxes = new LinkedHashSet<>();
-		for (String axis : axes) {
-			if (axis == null) {
-				continue;
-			}
-			String normalizedAxis = axis.trim();
-			if (!normalizedAxis.isBlank()) {
-				normalizedAxes.add(normalizedAxis);
-			}
+	private CoachFeedback.Observation firstObservation(CoachFeedback.FeedbackCard card) {
+		if (card.observations() == null || card.observations().isEmpty()) {
+			throw new IllegalArgumentException("Feedback card observation is required.");
 		}
-		return new ArrayList<>(normalizedAxes);
+		return card.observations().getFirst();
 	}
 
 	public Long getId() {
@@ -182,8 +197,24 @@ public class Coaching {
 		return status;
 	}
 
-	public String getPerformanceIntent() {
-		return performanceIntent;
+	public String getGenre() {
+		return genre;
+	}
+
+	public String getCustomGenre() {
+		return customGenre;
+	}
+
+	public String getSituation() {
+		return situation;
+	}
+
+	public String getCharacterSetting() {
+		return characterSetting;
+	}
+
+	public String getSubtext() {
+		return subtext;
 	}
 
 	public String getVideoStorageKey() {
@@ -204,6 +235,15 @@ public class Coaching {
 
 	public String getResultSceneIntent() {
 		return resultSceneIntent;
+	}
+
+	public CoachFeedback getFeedback() {
+		return new CoachFeedback(
+				new CoachFeedback.OverallStrength(resultOverallStrengthText),
+				feedbackCards.stream()
+						.map(CoachingFeedbackCard::toFeedbackCard)
+						.toList()
+		);
 	}
 
 	public String getResultSceneIntentSource() {
@@ -232,10 +272,6 @@ public class Coaching {
 
 	public String getResultFocusTimecode() {
 		return resultFocusTimecode;
-	}
-
-	public List<String> getResultFocusAxes() {
-		return List.copyOf(resultFocusAxes);
 	}
 
 	public String getResultFocusObservedSignal() {

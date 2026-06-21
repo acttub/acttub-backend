@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>코칭 카드 응답 JSON 예시</title>
+<style>
+  :root {
+    --bg: #eef0f3;
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --card: #fff;
+    --primary: #3b5bfd;
+    --primary-soft: #eef1ff;
+    --primary-deep: #2742d6;
+    --good: #0f9d58;
+    --surface: #f4f5f7;
+    --accent-bg: #f8f9ff;
+    --code-bg: #10141f;
+    --shadow: 0 1px 3px rgba(16, 24, 40, .07), 0 1px 2px rgba(16, 24, 40, .04);
+    --shadow-lg: 0 12px 40px rgba(16, 24, 40, .12);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px 18px 64px;
+  }
+
+  .top {
+    margin-bottom: 18px;
+  }
+
+  .meta {
+    margin: 0 0 4px;
+    color: var(--primary-deep);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.35;
+    letter-spacing: 0;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) 420px;
+    gap: 22px;
+    align-items: start;
+  }
+
+  .panel {
+    min-width: 0;
+    background: var(--card);
+    border: 1px solid #dfe2e7;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .panel-hd {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .panel-hd h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  pre {
+    margin: 0;
+    padding: 16px;
+    overflow: auto;
+    background: var(--code-bg);
+    color: #e6edf7;
+    font-size: 12px;
+    line-height: 1.55;
+    tab-size: 2;
+  }
+
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  .phone {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    background: #fff;
+    border: 1px solid #dfe2e7;
+    border-radius: 26px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    background: #fff;
+  }
+
+  .notch {
+    width: 108px;
+    height: 20px;
+    background: #16181d;
+    border-radius: 0 0 14px 14px;
+  }
+
+  .screen {
+    padding: 18px 16px 22px;
+    background: linear-gradient(#fff, #fbfcfe);
+  }
+
+  .hd {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .hd h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  .cnt {
+    margin-left: auto;
+    padding: 2px 9px;
+    background: var(--surface);
+    border-radius: 20px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .lead {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .strength {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 13px;
+    padding: 10px 12px;
+    border: 1px solid #cdeed8;
+    border-left: 3px solid var(--good);
+    border-radius: 0 12px 12px 0;
+    background: #eef9f1;
+    color: #1c6b43;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .strength b {
+    color: var(--good);
+  }
+
+  .diag {
+    margin-bottom: 13px;
+    padding: 15px 15px 14px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .title {
+    display: flex;
+    align-items: flex-start;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: 1.45;
+  }
+
+  .no {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    margin-right: 7px;
+    padding: 0 5px;
+    background: var(--primary);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .tx {
+    flex: 1;
+  }
+
+  .sect {
+    margin-top: 12px;
+  }
+
+  .lab {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 5px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .02em;
+  }
+
+  .obs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .o {
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 8px;
+    color: #2b2f36;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .tc {
+    height: fit-content;
+    margin-top: 1px;
+    padding: 2px 0;
+    background: var(--primary-soft);
+    border-radius: 6px;
+    color: var(--primary-deep);
+    font-size: 10.5px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .tc.none {
+    background: var(--surface);
+    color: var(--muted);
+  }
+
+  .cause {
+    padding: 9px 11px;
+    background: var(--accent-bg);
+    border-left: 3px solid var(--primary);
+    border-radius: 0 9px 9px 0;
+    color: #23262c;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .rx {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 8px;
+    color: #23262c;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .ck {
+    color: var(--primary);
+    font-weight: 900;
+  }
+
+  .gain {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 9px;
+    color: var(--good);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+
+  .nowbar {
+    margin: 4px 0 13px;
+    padding: 9px;
+    background: var(--primary-soft);
+    border-radius: 11px;
+    color: var(--primary-deep);
+    font-size: 12.5px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .cta {
+    display: block;
+    width: 100%;
+    padding: 13px;
+    background: var(--primary);
+    border: 0;
+    border-radius: 13px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  @media (max-width: 920px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+
+    .panel {
+      order: 2;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="top">
+    <p class="meta">SOMA-122 응답 구조 초안</p>
+    <h1>코칭 카드 JSON과 렌더링 예시</h1>
+  </div>
+
+  <div class="layout">
+    <section class="panel" aria-label="JSON 예시">
+      <div class="panel-hd">
+        <h2>응답 JSON</h2>
+      </div>
+      <pre><code id="json"></code></pre>
+    </section>
+
+    <section class="phone" aria-label="렌더링 예시">
+      <div class="status"><div class="notch"></div></div>
+      <div class="screen" id="card"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const response = {
+  data: {
+    coachingId: "123",
+    status: "COMPLETED",
+    createdAt: "2026-06-20T16:30:00+09:00",
+    completedAt: "2026-06-20T16:30:12+09:00",
+    input: {
+      genre: "영화",
+      customGenre: null,
+      situation: "헤어진 연인을 우연히 다시 만난 상황",
+      characterSetting: "감정을 쉽게 드러내지 않는 배우 지망생",
+      subtext: null
+    },
+    result: {
+      overallStrength: {
+        text: "전반적으로, 상대를 떠올리며 흐름을 끝까지 끊지 않은 선택은 살아 있어요."
+      },
+      feedbackCards: [
+        {
+          order: 1,
+          title: "첫 문장 전에 몸의 긴장을 한 번 덜어내면 목표가 더 선명해져요",
+          observations: [
+            {
+              timecode: "0:14",
+              text: "몸: ‘왜 나한테 그랬어’ 대사에서 어깨가 귀 쪽으로 올라가고, 시선이 상대 눈에서 천장으로 떴어요."
+            },
+            {
+              timecode: "0:32",
+              text: "몸: 분노가 터지는 순간, 팔이 옆구리에 붙은 채 손끝만 떨렸어요."
+            },
+            {
+              timecode: "전반",
+              text: "대사: 들숨이 얕아 문장 끝마다 소리가 살짝 잠겼어요."
+            }
+          ],
+          cause: "왜냐면 장면 목표를 보내기 전에 몸이 먼저 방어 자세를 잡는 선택이 앞선 것 같아요.",
+          practiceSteps: [
+            "촬영 직전 30초 동안 어깨를 귀까지 올렸다가 툭 떨어뜨리기 5회",
+            "들숨 4초, 날숨 6초 심호흡 3회",
+            "대사 전 시선을 둘 한 점을 미리 정해두기",
+            "속으로 ‘잘하자’ 대신 ‘상대에게 말한다’ 한 문장만 떠올리기"
+          ],
+          expectedEffect: "그럼 분노가 목에 갇히지 않고 얼굴과 팔까지 살아나요."
+        }
+      ]
+    }
+  }
+};
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderCard(payload) {
+  const result = payload.data.result;
+  const headline = "이번 연기, 이런 게 보여요";
+  const lead = "중요한 것부터 — 하나씩 풀면 돼요.";
+  const cardHtml = result.feedbackCards.map((feedbackCard, index) => {
+    return `
+      <article class="diag">
+        <div class="title"><span class="no">${feedbackCard.order}</span><span class="tx">${escapeHtml(feedbackCard.title)}</span></div>
+
+        <div class="sect">
+          <div class="lab">👀 이런 모습이 보였어요</div>
+          <div class="obs">
+            ${feedbackCard.observations.map((observation) => `
+              <div class="o">
+                <span class="tc ${observation.timecode === "전반" ? "none" : ""}">${escapeHtml(observation.timecode)}</span>
+                <span>${escapeHtml(observation.text)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="sect">
+          <div class="lab">🔍 왜냐면</div>
+          <div class="cause">${escapeHtml(feedbackCard.cause)}</div>
+        </div>
+
+        <div class="sect">
+          <div class="lab">🛠 이렇게 해보세요</div>
+          <div class="rx">
+            ${feedbackCard.practiceSteps.map((practiceStep, stepIndex) => `
+              <div class="step"><span class="ck">${stepIndex + 1}</span><span>${escapeHtml(practiceStep)}</span></div>
+            `).join("")}
+          </div>
+          <div class="gain">↗ ${escapeHtml(feedbackCard.expectedEffect)}</div>
+        </div>
+      </article>
+      ${index === 0 ? '<div class="nowbar">👉 지금은 1번부터 — 이것만 고쳐 다시 찍어보세요</div>' : ''}
+    `;
+  }).join("");
+
+  return `
+    <div class="hd">
+      <h2>🎬 ${escapeHtml(headline)}</h2>
+      <span class="cnt">${result.feedbackCards.length}개 발견</span>
+    </div>
+    <p class="lead">${escapeHtml(lead)}</p>
+    <div class="strength"><span>👏</span><span>${escapeHtml(result.overallStrength.text)}</span></div>
+    ${cardHtml}
+    <button class="cta">🎬 고쳐서 다시 찍고 비교받기</button>
+  `;
+}
+
+document.getElementById("json").textContent = JSON.stringify(response, null, 2);
+document.getElementById("card").innerHTML = renderCard(response);
+</script>
+</body>
+</html>

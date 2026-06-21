@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import com.jayway.jsonpath.JsonPath;
+import com.loading.acttub_backend.coaching.application.model.CoachingInput;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalyzer;
 import com.loading.acttub_backend.coaching.application.port.CoachingRepository;
@@ -24,7 +25,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,38 +41,30 @@ class CoachingLongAiResultIntegrationTest {
 	@Autowired
 	private CoachingRepository coachingRepository;
 
-	@Autowired
-	private JdbcTemplate jdbcTemplate;
-
 	@Test
 	void storesLongAiResultLabelsWithoutTruncation() throws Exception {
-		MvcResult result = mockMvc.perform(multipart("/api/v1/coachings")
-						.file(new MockMultipartFile(
+		MvcResult result = mockMvc.perform(coachingRequest(new MockMultipartFile(
 								"video",
 								"scene.mp4",
 								"video/mp4",
 								"fake-video".getBytes(StandardCharsets.UTF_8)
-						))
-						.param("performanceIntent", "차분하지만 단호한 감정"))
+						)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.coachingId", notNullValue()))
 				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
-				.andExpect(jsonPath("$.data.result.nextStep.action").value(longText("action")))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect").value(longText("effect")))
 				.andReturn();
 
 		String coachingId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.coachingId");
 		Coaching coaching = coachingRepository.findById(Long.valueOf(coachingId)).orElseThrow();
 
-		assertThat(coaching.getResultStrengthTimecode()).isEqualTo(longText("strength-timecode"));
-		assertThat(coaching.getResultStrengthAxis()).isEqualTo(longText("axis"));
-		assertThat(coaching.getResultStrengthTier()).isEqualTo(longText("tier"));
-		assertThat(coaching.getResultFocusTimecode()).isEqualTo(longText("focus-timecode"));
-		assertThat(coaching.getResultNextStepAction()).isEqualTo(longText("action"));
-		assertThat(jdbcTemplate.queryForList(
-				"select axis from coaching_focus_axes where coaching_id = ? order by axis_order",
-				String.class,
-				Long.valueOf(coachingId)
-		)).containsExactly(longText("focus-axis"));
+		assertThat(coaching.getResultSceneIntent()).isEqualTo(longText("title"));
+		assertThat(coaching.getResultStrengthSignal()).isEqualTo(longText("strength"));
+		assertThat(coaching.getResultFocusTimecode()).isEqualTo(longText("timecode"));
+		assertThat(coaching.getResultFocusObservedSignal()).isEqualTo(longText("observation"));
+		assertThat(coaching.getResultFocusRootCause()).isEqualTo(longText("cause"));
+		assertThat(coaching.getResultFocusPrescription()).isEqualTo(longText("step"));
+		assertThat(coaching.getResultNextStepText()).isEqualTo(longText("effect"));
 	}
 
 	@TestConfiguration
@@ -88,25 +80,17 @@ class CoachingLongAiResultIntegrationTest {
 	private static class LongAiResultAnalyzer implements CoachingAnalyzer {
 
 		@Override
-		public CoachingAnalysisResult analyze(VideoInput video, String performanceIntent) {
+		public CoachingAnalysisResult analyze(VideoInput video, CoachingInput input) {
 				CoachFeedback feedback = new CoachFeedback(
-						new CoachFeedback.SceneIntent(performanceIntent, "actor_input"),
-						new CoachFeedback.Strength(
-								longText("strength-timecode"),
-								longText("axis"),
-								"관찰 신호",
-							"좋은 이유",
-							longText("tier")
-						),
-						new CoachFeedback.Focus(
-								longText("focus-timecode"),
-								List.of(longText("focus-axis")),
-							"관찰",
-							"원인",
-							"차이",
-							"처방"
-					),
-					new CoachFeedback.NextStep("다음 단계", longText("action"))
+						new CoachFeedback.OverallStrength(longText("strength")),
+						List.of(new CoachFeedback.FeedbackCard(
+								1,
+								longText("title"),
+								List.of(new CoachFeedback.Observation(longText("timecode"), longText("observation"))),
+								longText("cause"),
+								List.of(longText("step")),
+								longText("effect")
+						))
 			);
 			return new CoachingAnalysisResult("gemini", "Gemini 3.5 Flash", BigDecimal.ZERO, "analysis-v0.2", feedback);
 		}
@@ -114,5 +98,15 @@ class CoachingLongAiResultIntegrationTest {
 
 	private static String longText(String prefix) {
 		return prefix + "-" + "x".repeat(150);
+	}
+
+	private org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder coachingRequest(MockMultipartFile video) {
+		org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder builder = multipart("/api/v1/coachings");
+		builder.file(video);
+		builder.param("genre", "영화");
+		builder.param("situation", "헤어진 연인을 우연히 다시 만난 상황");
+		builder.param("characterSetting", "감정을 쉽게 드러내지 않는 배우 지망생");
+		builder.param("subtext", "아직 미련이 있지만 괜찮은 척한다");
+		return builder;
 	}
 }

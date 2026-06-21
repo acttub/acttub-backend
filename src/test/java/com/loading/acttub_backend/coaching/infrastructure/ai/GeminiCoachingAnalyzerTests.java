@@ -15,7 +15,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.loading.acttub_backend.coaching.application.model.CoachingInput;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
+import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -52,21 +54,23 @@ class GeminiCoachingAnalyzerTests {
 				1_000L
 		);
 
-		analyzer.analyze(new VideoInput(
+		CoachingAnalysisResult result = analyzer.analyze(new VideoInput(
 				"scene.mp4",
 				"video/mp4",
 				videoBytes.length,
 				() -> new NoBulkReadInputStream(videoBytes)
-		), "차분하지만 단호한 감정");
+		), coachingInput());
 
 		assertThat(uploadedBody.get()).isEqualTo("fake-video");
+		assertThat(result.feedback().overallStrength().text()).isEqualTo("전체 강점");
+		assertThat(result.feedback().feedbackCards().getFirst().observations().getFirst().text()).isEqualTo("몸: 관찰");
 	}
 
 	@Test
 	void failsWhenGeminiResponseOmitsRequiredFeedbackField() throws Exception {
 		byte[] videoBytes = "fake-video".getBytes(StandardCharsets.UTF_8);
 		startGeminiServer(new AtomicReference<>(), """
-				{"sceneIntent":{"text":"의도","source":"actor_input"},"strength":{"timecode":"00:01","axis":"voice","signal":"명확함","why":"전달됨","tier":"good"},"focus":{"timecode":"00:02","axes":["emotion"],"observedSignal":"작음","rootCause":"긴장","intentGap":"간극"},"nextStep":{"text":"다시 시도","action":"retry"}}
+				{"overallStrength":{"text":"전체 강점"},"feedbackCards":[{"order":1,"title":"진단","observations":[{"timecode":"00:01","text":"몸: 관찰"}],"cause":"원인","practiceSteps":["연습"]}]}
 				""");
 
 		GeminiCoachingAnalyzer analyzer = new GeminiCoachingAnalyzer(
@@ -84,14 +88,24 @@ class GeminiCoachingAnalyzerTests {
 				"video/mp4",
 				videoBytes.length,
 				() -> new NoBulkReadInputStream(videoBytes)
-		), "차분하지만 단호한 감정"))
+		), coachingInput()))
 				.isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("Gemini response missing required field: focus.prescription");
+				.hasMessageContaining("Gemini response missing required field: expectedEffect");
+	}
+
+	private CoachingInput coachingInput() {
+		return new CoachingInput(
+				"영화",
+				null,
+				"헤어진 연인을 우연히 다시 만난 상황",
+				"감정을 쉽게 드러내지 않는 배우 지망생",
+				"아직 미련이 있지만 괜찮은 척한다"
+		);
 	}
 
 	private void startGeminiServer(AtomicReference<String> uploadedBody) throws IOException {
 		startGeminiServer(uploadedBody, """
-				{"sceneIntent":{"text":"의도","source":"actor_input"},"strength":{"timecode":"00:01","axis":"voice","signal":"명확함","why":"전달됨","tier":"good"},"focus":{"timecode":"00:02","axes":["emotion"],"observedSignal":"작음","rootCause":"긴장","intentGap":"간극","prescription":"호흡"},"nextStep":{"text":"다시 시도","action":"retry"}}
+				{"overallStrength":{"text":"전체 강점"},"feedbackCards":[{"order":1,"title":"진단","observations":[{"timecode":"00:01","text":"몸: 관찰"}],"cause":"원인","practiceSteps":["연습"],"expectedEffect":"기대 효과"}]}
 				""");
 	}
 
