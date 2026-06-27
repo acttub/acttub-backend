@@ -256,7 +256,7 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 		return new CoachingDiagnosisResult(
 				requiredText(root, "refinedSituation"),
 				requiredText(root, "refinedIntent"),
-				parseFeedback(root.path("feedback"))
+				parseFeedback(requiredObject(root, "feedback"))
 		);
 	}
 
@@ -307,6 +307,10 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 				당신은 배우를 돕는 연기 코치입니다. 초기 영상 관찰 맥락과 배우의 답변을 바탕으로 최종 진단 피드백을 만듭니다.
 
 				출력은 설명 문장, 마크다운 코드블록 없이 JSON 객체 하나만 반환하세요.
+				진단 단계에는 영상 파일이 없으므로 새 영상 근거, timecode, 대사를 만들지 마세요.
+				최종 피드백 observations는 initialContext.analysis, initialContext.measurableSignals[].evidence, initialContext.transcript에서만 가져오세요.
+				초기 맥락에 신뢰할 수 있는 timecode가 없으면 timecode는 "전반"으로 쓰세요.
+				아래 예시의 timecode나 문장을 실제 사실로 사용하지 마세요.
 
 				[배우 입력]
 				- 매체/장르: %s
@@ -330,7 +334,7 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 				      {
 				        "order":1,
 				        "title":"첫 멈춤 전에 숨기는 이유를 분명히 잡아보세요",
-				        "observations":[{"timecode":"0:28","text":"대사 사이 멈춤이 보였어요."}],
+				        "observations":[{"timecode":"전반","text":"measurableSignals의 evidence와 analysis에 근거한 관찰을 쓰세요."}],
 				        "cause":"왜냐면 방어의 이유가 아직 충분히 걸리지 않은 것 같아요.",
 				        "practiceSteps":["첫 대사 전 시선을 2초 고정하세요."],
 				        "expectedEffect":"그럼 숨기는 이유가 선명해져요."
@@ -394,6 +398,14 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 			));
 		}
 		return values;
+	}
+
+	private JsonNode requiredObject(JsonNode root, String field) {
+		JsonNode value = root.path(field);
+		if (!value.isObject()) {
+			throw new IllegalStateException("Gemini response missing required field: " + field);
+		}
+		return value;
 	}
 
 	private List<CoachFeedback.Observation> requiredObservations(JsonNode card, int cardIndex) {
