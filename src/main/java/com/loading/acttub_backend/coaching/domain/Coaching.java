@@ -204,12 +204,13 @@ public class Coaching {
 				|| feedback.feedbackCards().stream().anyMatch(Objects::isNull)) {
 			throw new IllegalArgumentException("Feedback is required.");
 		}
-		CoachFeedback.FeedbackCard primaryCard = feedback.feedbackCards().getFirst();
-		if (primaryCard.observations() == null || primaryCard.observations().isEmpty()
-				|| primaryCard.observations().getFirst() == null
-				|| primaryCard.practiceSteps() == null
-				|| primaryCard.practiceSteps().stream().anyMatch(Objects::isNull)) {
-			throw new IllegalArgumentException("Feedback is required.");
+		for (CoachFeedback.FeedbackCard card : feedback.feedbackCards()) {
+			if (card.observations() == null || card.observations().isEmpty()
+					|| card.observations().stream().anyMatch(Objects::isNull)
+					|| card.practiceSteps() == null || card.practiceSteps().isEmpty()
+					|| card.practiceSteps().stream().anyMatch(Objects::isNull)) {
+				throw new IllegalArgumentException("Feedback is required.");
+			}
 		}
 		return feedback;
 	}
