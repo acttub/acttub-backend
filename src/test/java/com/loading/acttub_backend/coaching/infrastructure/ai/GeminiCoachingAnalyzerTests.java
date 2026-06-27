@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,6 +19,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.loading.acttub_backend.coaching.application.model.CoachingInput;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
+import com.loading.acttub_backend.coaching.domain.CoachingDiagnosisResult;
+import com.loading.acttub_backend.coaching.domain.CoachingInitialContext;
+import com.loading.acttub_backend.coaching.domain.MeasurableSignal;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -62,15 +66,15 @@ class GeminiCoachingAnalyzerTests {
 		), coachingInput());
 
 		assertThat(uploadedBody.get()).isEqualTo("fake-video");
-		assertThat(result.feedback().overallStrength().text()).isEqualTo("전체 강점");
-		assertThat(result.feedback().feedbackCards().getFirst().observations().getFirst().text()).isEqualTo("몸: 관찰");
+		assertThat(result.initialContext().question()).isEqualTo("이 장면에서 숨기고 싶은 감정은 무엇이었나요?");
+		assertThat(result.initialContext().measurableSignals().getFirst().name()).isEqualTo("pauseCount");
 	}
 
 	@Test
-	void failsWhenGeminiResponseOmitsRequiredFeedbackField() throws Exception {
+	void failsWhenGeminiResponseOmitsRequiredInitialField() throws Exception {
 		byte[] videoBytes = "fake-video".getBytes(StandardCharsets.UTF_8);
 		startGeminiServer(new AtomicReference<>(), """
-				{"overallStrength":{"text":"전체 강점"},"feedbackCards":[{"order":1,"title":"진단","observations":[{"timecode":"00:01","text":"몸: 관찰"}],"cause":"원인","practiceSteps":["연습"]}]}
+				{"question":"질문","analysis":"분석","measurableSignals":[{"name":"pauseCount","value":2,"unit":"count","evidence":"두 번 멈춤"}]}
 				""");
 
 		GeminiCoachingAnalyzer analyzer = new GeminiCoachingAnalyzer(
@@ -90,7 +94,40 @@ class GeminiCoachingAnalyzerTests {
 				() -> new NoBulkReadInputStream(videoBytes)
 		), coachingInput()))
 				.isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("Gemini response missing required field: expectedEffect");
+				.hasMessageContaining("diagnosticHypothesis");
+	}
+
+	@Test
+	void diagnosesFromInitialContextAndAnswer() throws Exception {
+		AtomicReference<String> uploadedBody = new AtomicReference<>();
+		startGeminiServer(uploadedBody);
+
+		GeminiCoachingAnalyzer analyzer = new GeminiCoachingAnalyzer(
+				new ObjectMapper(),
+				"test-api-key",
+				"http://localhost:" + server.getAddress().getPort(),
+				"gemini-test",
+				BigDecimal.ZERO,
+				"test-prompt",
+				1_000L
+		);
+
+		CoachingDiagnosisResult result = analyzer.diagnose(
+				coachingInput(),
+				new CoachingInitialContext(
+						"이 장면에서 숨기고 싶은 감정은 무엇이었나요?",
+						"안녕. 오랜만이네.",
+						"감정을 참는 선택이 보입니다.",
+						List.of(new MeasurableSignal("pauseCount", BigDecimal.valueOf(2), "count", "두 번 멈춤")),
+						"숨기는 이유가 아직 덜 선명한 것 같아요."
+				),
+				"약하게 보이고 싶지 않았어요."
+		);
+
+		assertThat(uploadedBody.get()).isNull();
+		assertThat(result.refinedSituation()).isEqualTo("약하게 보이고 싶지 않아 미련을 숨기는 상황");
+		assertThat(result.refinedIntent()).isEqualTo("미련을 숨기며 상대의 반응을 확인한다");
+		assertThat(result.feedback().feedbackCards().getFirst().title()).isEqualTo("첫 멈춤 전에 숨기는 이유를 분명히 잡아보세요");
 	}
 
 	private CoachingInput coachingInput() {
@@ -105,11 +142,14 @@ class GeminiCoachingAnalyzerTests {
 
 	private void startGeminiServer(AtomicReference<String> uploadedBody) throws IOException {
 		startGeminiServer(uploadedBody, """
-				{"overallStrength":{"text":"전체 강점"},"feedbackCards":[{"order":1,"title":"진단","observations":[{"timecode":"00:01","text":"몸: 관찰"}],"cause":"원인","practiceSteps":["연습"],"expectedEffect":"기대 효과"}]}
+				{"question":"이 장면에서 숨기고 싶은 감정은 무엇이었나요?","transcript":"안녕. 오랜만이네.","analysis":"감정을 참는 선택이 보입니다.","measurableSignals":[{"name":"pauseCount","value":2,"unit":"count","evidence":"두 번 멈춤"}],"diagnosticHypothesis":"숨기는 이유가 아직 덜 선명한 것 같아요."}
 				""");
 	}
 
-	private void startGeminiServer(AtomicReference<String> uploadedBody, String feedbackJson) throws IOException {
+	private void startGeminiServer(AtomicReference<String> uploadedBody, String initialContextJson) throws IOException {
+		String diagnosisJson = """
+				{"refinedSituation":"약하게 보이고 싶지 않아 미련을 숨기는 상황","refinedIntent":"미련을 숨기며 상대의 반응을 확인한다","feedback":{"overallStrength":{"text":"전반적으로 버티는 선택이 좋았어요."},"feedbackCards":[{"order":1,"title":"첫 멈춤 전에 숨기는 이유를 분명히 잡아보세요","observations":[{"timecode":"0:28","text":"대사 사이 멈춤이 보였어요."}],"cause":"왜냐면 방어의 이유가 아직 충분히 걸리지 않은 것 같아요.","practiceSteps":["첫 대사 전 시선을 2초 고정하세요."],"expectedEffect":"그럼 숨기는 이유가 선명해져요."}]}}
+				""";
 		server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
 		serverExecutor = Executors.newSingleThreadExecutor();
 		server.setExecutor(serverExecutor);
@@ -135,7 +175,9 @@ class GeminiCoachingAnalyzerTests {
 		});
 		server.createContext("/v1beta/models/gemini-test:generateContent", exchange -> {
 			assertThat(exchange.getRequestMethod()).isEqualTo("POST");
-			sendJson(exchange, 200, geminiResponse(feedbackJson));
+			String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+			String responseJson = requestBody.contains("file_data") ? initialContextJson : diagnosisJson;
+			sendJson(exchange, 200, geminiResponse(responseJson));
 		});
 		server.start();
 	}
