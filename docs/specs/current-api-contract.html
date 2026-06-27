@@ -135,7 +135,7 @@
 }</code></pre>
 
 	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings</code></h2>
-	<p>연기 영상과 장면 맥락을 업로드해 코칭 피드백을 생성합니다.</p>
+	<p>연기 영상과 장면 맥락을 업로드해 추가 진단 질문을 포함한 <code>QUESTION_READY</code> 코칭을 생성합니다.</p>
 
 	<h3>요청</h3>
 	<table>
@@ -227,9 +227,9 @@
 	<pre><code>{
   "data": {
     "coachingId": "1",
-    "status": "COMPLETED",
+    "status": "QUESTION_READY",
     "createdAt": "2026-06-20T18:10:00+09:00",
-    "completedAt": "2026-06-20T18:10:12+09:00",
+    "completedAt": null,
     "input": {
       "genre": "영화",
       "customGenre": null,
@@ -237,33 +237,26 @@
       "characterSetting": "감정을 쉽게 드러내지 않는 배우 지망생",
       "subtext": "아직 미련이 있지만 괜찮은 척한다"
     },
-    "result": {
-      "overallStrength": {
-        "text": "전반적으로, 감정을 바로 터뜨리지 않고 버티는 힘이 보여 장면의 진심이 살아났어요."
-      },
-      "feedbackCards": [
-        {
-          "order": 1,
-          "title": "도입부 긴장이 먼저 올라와 감정의 높이가 줄었어요",
-          "observations": [
-            {
-              "timecode": "0:00-0:15",
-              "text": "첫 대사 전부터 어깨와 목소리가 굳어 있었습니다."
-            }
-          ],
-          "cause": "장면을 잘 해내야 한다는 부담이 감정보다 먼저 몸을 방어 자세로 만들었어요.",
-          "practiceSteps": [
-            "촬영 직전 어깨를 귀까지 올렸다가 툭 떨어뜨리기 5회",
-            "첫 대사는 아직 괜찮은 사람처럼 시작하기"
-          ],
-          "expectedEffect": "그럼 감정이 처음부터 소진되지 않고 후반까지 더 선명하게 쌓여요."
-        }
-      ]
+    "dialogue": {
+      "question": "상대가 다시 말을 걸었을 때, 인물이 가장 숨기고 싶은 감정은 무엇이었나요?"
+    },
+    "context": {
+      "transcript": "오랜만이네. 잘 지냈어?",
+      "analysis": "대사 전 호흡이 짧아지고 시선이 흔들려 재회 상황의 긴장이 먼저 드러납니다.",
+      "measurableSignals": [
+        "0:00-0:15 구간에서 어깨 긴장 상승",
+        "첫 대사 직전 2초간 시선 회피"
+      ],
+      "diagnosticHypothesis": "인물이 괜찮은 척하려는 목표보다 재회의 당혹감이 먼저 표면화되고 있습니다."
     }
   }
 }</code></pre>
 
-	<p class="note"><code>status</code>는 도메인 상태값이며 현재 응답 예시는 정상 완료 기준 <code>COMPLETED</code>입니다. 도메인에는 <code>ANALYZING</code>, <code>COMPLETED</code>, <code>FAILED</code>가 있습니다.</p>
+	<p class="note">
+		이 응답은 최종 피드백을 바로 생성하지 않습니다. <code>dialogue.question</code>에 대한 사용자 답변을 진단 API로 제출해야 최종 <code>result</code> 카드가 생성됩니다.
+		초기 응답의 <code>result</code>는 없거나 <code>null</code>이며, <code>@JsonInclude</code> 설정에 따라 JSON에서 생략될 수 있습니다.
+		<code>status</code>는 도메인 상태값이며 도메인에는 <code>ANALYZING</code>, <code>QUESTION_READY</code>, <code>COMPLETED</code>, <code>FAILED</code>가 있습니다.
+	</p>
 
 	<h3>오류 응답</h3>
 	<table>
@@ -321,6 +314,108 @@
 		</tr>
 		</tbody>
 	</table>
+
+	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings/{coachingId}/diagnosis</code></h2>
+	<p>초기 코칭에서 생성된 진단 질문의 답변을 제출해 저장된 초기 맥락과 함께 최종 코칭 피드백을 생성합니다. 영상은 다시 업로드하지 않습니다.</p>
+
+	<h3>요청</h3>
+	<table>
+		<thead>
+		<tr>
+			<th>항목</th>
+			<th>값</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td>Content-Type</td>
+			<td><code>application/json</code></td>
+		</tr>
+		<tr>
+			<td>Path variable</td>
+			<td><code>coachingId</code>: long</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<table>
+		<thead>
+		<tr>
+			<th>필드</th>
+			<th>타입</th>
+			<th>필수</th>
+			<th>검증/정규화</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td><code>answer</code></td>
+			<td>string</td>
+			<td>예</td>
+			<td>진단 질문에 대한 사용자 답변입니다. 앞뒤 공백 제거 후 빈 값이면 유효하지 않습니다.</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<h3>요청 예시</h3>
+	<pre><code>{
+  "answer": "아직 미련이 있다는 걸 들키고 싶지 않았습니다."
+}</code></pre>
+
+	<h3>201 응답</h3>
+	<pre><code>{
+  "data": {
+    "coachingId": "1",
+    "status": "COMPLETED",
+    "createdAt": "2026-06-20T18:10:00+09:00",
+    "completedAt": "2026-06-20T18:11:00+09:00",
+    "input": {
+      "genre": "영화",
+      "customGenre": null,
+      "situation": "헤어진 연인을 우연히 다시 만난 상황",
+      "characterSetting": "감정을 쉽게 드러내지 않는 배우 지망생",
+      "subtext": "아직 미련이 있지만 괜찮은 척한다"
+    },
+    "dialogue": {
+      "question": "상대가 다시 말을 걸었을 때, 인물이 가장 숨기고 싶은 감정은 무엇이었나요?",
+      "answer": "아직 미련이 있다는 걸 들키고 싶지 않았습니다."
+    },
+    "refinedContext": {
+      "transcript": "오랜만이네. 잘 지냈어?",
+      "analysis": "답변을 반영하면 시선 회피는 무관심이 아니라 미련을 감추려는 선택으로 해석됩니다.",
+      "measurableSignals": [
+        "첫 대사 직전 2초간 시선 회피",
+        "답변 의도와 달리 문장 끝 호흡이 흔들림"
+      ],
+      "diagnosticHypothesis": "인물의 목표는 평정심을 유지하는 것이며, 미세한 호흡 흔들림이 숨긴 감정을 드러냅니다."
+    },
+    "result": {
+      "overallStrength": {
+        "text": "전반적으로, 감정을 바로 터뜨리지 않고 버티는 힘이 보여 장면의 진심이 살아났어요."
+      },
+      "feedbackCards": [
+        {
+          "order": 1,
+          "title": "도입부 긴장이 먼저 올라와 감정의 높이가 줄었어요",
+          "observations": [
+            {
+              "timecode": "0:00-0:15",
+              "text": "첫 대사 전부터 어깨와 목소리가 굳어 있었습니다."
+            }
+          ],
+          "cause": "장면을 잘 해내야 한다는 부담이 감정보다 먼저 몸을 방어 자세로 만들었어요.",
+          "practiceSteps": [
+            "촬영 직전 어깨를 귀까지 올렸다가 툭 떨어뜨리기 5회",
+            "첫 대사는 아직 괜찮은 사람처럼 시작하기"
+          ],
+          "expectedEffect": "그럼 감정이 처음부터 소진되지 않고 후반까지 더 선명하게 쌓여요."
+        }
+      ]
+    }
+  }
+}</code></pre>
+
+	<p class="note">진단 API는 새 영상을 받지 않고, <code>/api/v1/coachings</code>에서 저장한 초기 <code>context</code>와 사용자 <code>answer</code>를 사용해 <code>refinedContext</code>와 최종 <code>result</code>를 생성합니다.</p>
 
 	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings/{coachingId}/evaluation</code></h2>
 	<p>완료된 코칭 결과에 사용자 평가를 등록합니다. 코칭 하나당 평가는 한 번만 등록할 수 있습니다.</p>
