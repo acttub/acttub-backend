@@ -5,12 +5,16 @@ import java.util.Map;
 
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.CoachingInput;
+import com.loading.acttub_backend.coaching.application.model.DiagnosisCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationResult;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.service.CoachingService;
 import com.loading.acttub_backend.coaching.application.service.EvaluationService;
+import com.loading.acttub_backend.coaching.domain.CoachingInitialContext;
+import com.loading.acttub_backend.coaching.domain.MeasurableSignal;
 import com.loading.acttub_backend.coaching.presentation.dto.CoachingResponse;
+import com.loading.acttub_backend.coaching.presentation.dto.DiagnosisRequest;
 import com.loading.acttub_backend.coaching.presentation.dto.EvaluationRequest;
 import com.loading.acttub_backend.coaching.presentation.dto.EvaluationResponse;
 import com.loading.acttub_backend.global.api.ApiEnvelope;
@@ -65,6 +69,29 @@ public class CoachingController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.create(toVideoInput(video), input))));
 	}
 
+	@PostMapping(value = "/api/v1/coachings/{coachingId}/diagnosis", consumes = MediaType.APPLICATION_JSON_VALUE)
+	@Operation(
+			summary = "코칭 진단 답변 등록",
+			description = "초기 분석 질문에 대한 사용자 답변을 전달해 최종 코칭 피드백을 생성합니다."
+	)
+	@ApiResponse(responseCode = "201", description = "코칭 진단 완료")
+	public ResponseEntity<ApiEnvelope<CoachingResponse>> diagnose(
+			@Parameter(description = "코칭 ID")
+			@PathVariable Long coachingId,
+			@RequestBody DiagnosisRequest request
+	) {
+		if (request == null) {
+			throw new ApiException(
+					HttpStatus.BAD_REQUEST,
+					"INVALID_DIAGNOSIS_REQUEST",
+					"Invalid diagnosis request.",
+					Map.of("fields", List.of("answer"))
+			);
+		}
+		CoachingResult result = coachingService.diagnose(coachingId, new DiagnosisCommand(request.answer()));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(result)));
+	}
+
 	@PostMapping(value = "/api/v1/coachings/{coachingId}/evaluation", consumes = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(
 			summary = "코칭 평가 등록",
@@ -101,7 +128,54 @@ public class CoachingController {
 						result.input().characterSetting(),
 						result.input().subtext()
 				),
+				toDialogue(result.initialContext()),
+				toInitialContext(result.initialContext()),
+				toRefinedContext(result),
 				result.feedback()
+		);
+	}
+
+	private CoachingResponse.Dialogue toDialogue(CoachingInitialContext initialContext) {
+		if (initialContext == null) {
+			return null;
+		}
+		return new CoachingResponse.Dialogue(initialContext.question());
+	}
+
+	private CoachingResponse.InitialContext toInitialContext(CoachingInitialContext initialContext) {
+		if (initialContext == null) {
+			return null;
+		}
+		return new CoachingResponse.InitialContext(
+				initialContext.transcript(),
+				initialContext.analysis(),
+				toMeasurableSignals(initialContext.measurableSignals()),
+				initialContext.diagnosticHypothesis()
+		);
+	}
+
+	private List<CoachingResponse.MeasurableSignalResponse> toMeasurableSignals(List<MeasurableSignal> measurableSignals) {
+		if (measurableSignals == null) {
+			return List.of();
+		}
+		return measurableSignals.stream()
+				.map(signal -> new CoachingResponse.MeasurableSignalResponse(
+						signal.name(),
+						signal.value(),
+						signal.unit(),
+						signal.evidence()
+				))
+				.toList();
+	}
+
+	private CoachingResponse.RefinedContext toRefinedContext(CoachingResult result) {
+		if (result.userAnswer() == null) {
+			return null;
+		}
+		return new CoachingResponse.RefinedContext(
+				result.userAnswer(),
+				result.refinedSituation(),
+				result.refinedIntent()
 		);
 	}
 
