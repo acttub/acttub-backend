@@ -1,6 +1,7 @@
 HELP.md
 .gradle
 build/
+.worktrees/
 /storage/
 /config/application-local-secret.yaml
 .env
