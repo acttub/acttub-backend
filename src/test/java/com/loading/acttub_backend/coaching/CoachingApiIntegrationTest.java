@@ -51,23 +51,27 @@ class CoachingApiIntegrationTest {
 	}
 
 	@Test
-	void createsCompletedCoachingWithAiResult() throws Exception {
+	void createsQuestionReadyCoachingWithInitialContext() throws Exception {
 		MockMultipartFile video = video("video/mp4");
 
 		mockMvc.perform(coachingRequest(video))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.coachingId", notNullValue()))
-				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
+				.andExpect(jsonPath("$.data.status").value("QUESTION_READY"))
+				.andExpect(jsonPath("$.data.completedAt").doesNotExist())
 				.andExpect(jsonPath("$.data.input.genre").value("영화"))
 				.andExpect(jsonPath("$.data.input.situation").value("헤어진 연인을 우연히 다시 만난 상황"))
 				.andExpect(jsonPath("$.data.input.characterSetting").value("감정을 쉽게 드러내지 않는 배우 지망생"))
 				.andExpect(jsonPath("$.data.input.subtext").value("아직 미련이 있지만 괜찮은 척한다"))
-				.andExpect(jsonPath("$.data.result.overallStrength.text", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].title", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].observations[0].timecode", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].cause", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].practiceSteps[0]", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect", notNullValue()));
+				.andExpect(jsonPath("$.data.dialogue.question", notNullValue()))
+				.andExpect(jsonPath("$.data.context.transcript", notNullValue()))
+				.andExpect(jsonPath("$.data.context.analysis", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].name", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].value", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].unit", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].evidence", notNullValue()))
+				.andExpect(jsonPath("$.data.context.diagnosticHypothesis", notNullValue()))
+				.andExpect(jsonPath("$.data.result").doesNotExist());
 	}
 
 	@Test
@@ -208,6 +212,56 @@ class CoachingApiIntegrationTest {
 	}
 
 	@Test
+	void completesDiagnosisWithUserAnswer() throws Exception {
+		String coachingId = createCoaching();
+
+		mockMvc.perform(submitDiagnosis(coachingId, "상대가 나를 약하게 볼까 봐 미련을 숨기고 싶었어요."))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.coachingId").value(coachingId))
+				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
+				.andExpect(jsonPath("$.data.completedAt", notNullValue()))
+				.andExpect(jsonPath("$.data.refinedContext.answer").value("상대가 나를 약하게 볼까 봐 미련을 숨기고 싶었어요."))
+				.andExpect(jsonPath("$.data.refinedContext.refinedSituation", notNullValue()))
+				.andExpect(jsonPath("$.data.refinedContext.refinedIntent", notNullValue()))
+				.andExpect(jsonPath("$.data.result.overallStrength.text", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].title", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].observations[0].timecode", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].cause", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].practiceSteps[0]", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect", notNullValue()));
+	}
+
+	@Test
+	void rejectsEmptyDiagnosisAnswer() throws Exception {
+		String coachingId = createCoaching();
+
+		mockMvc.perform(submitDiagnosis(coachingId, "   "))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_DIAGNOSIS_REQUEST"))
+				.andExpect(jsonPath("$.error.details.fields[0]").value("answer"));
+	}
+
+	@Test
+	void rejectsDiagnosisForMissingCoaching() throws Exception {
+		mockMvc.perform(submitDiagnosis("999999", "상대에게 약하게 보이고 싶지 않았어요."))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code").value("COACHING_NOT_FOUND"))
+				.andExpect(jsonPath("$.error.details.coachingId").value("999999"));
+	}
+
+	@Test
+	void rejectsDuplicateDiagnosis() throws Exception {
+		String coachingId = createCoaching();
+		mockMvc.perform(submitDiagnosis(coachingId, "상대에게 약하게 보이고 싶지 않았어요."))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(submitDiagnosis(coachingId, "다시 답변합니다."))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code").value("COACHING_NOT_READY_FOR_DIAGNOSIS"))
+				.andExpect(jsonPath("$.error.details.status").value("COMPLETED"));
+	}
+
+	@Test
 	void evaluatesCompletedCoachingOnce() throws Exception {
 		String coachingId = createCoaching();
 
@@ -332,6 +386,16 @@ class CoachingApiIntegrationTest {
 						  "comment": ""
 						}
 						"""));
+	}
+
+	private org.springframework.test.web.servlet.RequestBuilder submitDiagnosis(String coachingId, String answer) {
+		return post("/api/v1/coachings/{coachingId}/diagnosis", coachingId)
+				.contentType("application/json")
+				.content("""
+						{
+						  "answer": "%s"
+						}
+						""".formatted(answer));
 	}
 
 	private MockMultipartFile video(String contentType) {
