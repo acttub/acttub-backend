@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -57,6 +58,24 @@ public class Coaching {
 	private BigDecimal aiTemperature;
 	@Column(columnDefinition = "text")
 	private String aiPromptVersion;
+
+	@Column(columnDefinition = "text")
+	private String initialQuestion;
+	@Column(columnDefinition = "text")
+	private String initialTranscript;
+	@Column(columnDefinition = "text")
+	private String initialAnalysis;
+	@Convert(converter = MeasurableSignalsConverter.class)
+	@Column(name = "initial_measurable_signals_json", columnDefinition = "text")
+	private List<MeasurableSignal> initialMeasurableSignals = new ArrayList<>();
+	@Column(columnDefinition = "text")
+	private String initialDiagnosticHypothesis;
+	@Column(columnDefinition = "text")
+	private String userAnswer;
+	@Column(columnDefinition = "text")
+	private String refinedSituation;
+	@Column(columnDefinition = "text")
+	private String refinedIntent;
 
 	@Column(columnDefinition = "text")
 	private String resultOverallStrengthText;
@@ -129,15 +148,45 @@ public class Coaching {
 		return coaching;
 	}
 
+	public void markQuestionReady(CoachingInitialContext initialContext, CoachingAnalysisResult analysisResult,
+			OffsetDateTime now) {
+		this.status = CoachingStatus.QUESTION_READY;
+		this.aiProvider = analysisResult.provider();
+		this.aiModel = analysisResult.model();
+		this.aiTemperature = analysisResult.temperature();
+		this.aiPromptVersion = analysisResult.promptVersion();
+		this.initialQuestion = initialContext.question();
+		this.initialTranscript = initialContext.transcript();
+		this.initialAnalysis = initialContext.analysis();
+		this.initialMeasurableSignals = new ArrayList<>(initialContext.measurableSignals());
+		this.initialDiagnosticHypothesis = initialContext.diagnosticHypothesis();
+		this.updatedAt = now;
+	}
+
+	public void completeDiagnosis(String answer, CoachingDiagnosisResult diagnosisResult, OffsetDateTime now) {
+		this.status = CoachingStatus.COMPLETED;
+		this.userAnswer = answer;
+		this.refinedSituation = diagnosisResult.refinedSituation();
+		this.refinedIntent = diagnosisResult.refinedIntent();
+		applyFeedback(diagnosisResult.feedback());
+		this.completedAt = now;
+		this.updatedAt = now;
+	}
+
 	public void complete(CoachingAnalysisResult analysisResult, OffsetDateTime now) {
-		CoachFeedback feedback = analysisResult.feedback();
-		CoachFeedback.FeedbackCard primaryCard = firstFeedbackCard(feedback);
-		CoachFeedback.Observation primaryObservation = firstObservation(primaryCard);
 		this.status = CoachingStatus.COMPLETED;
 		this.aiProvider = analysisResult.provider();
 		this.aiModel = analysisResult.model();
 		this.aiTemperature = analysisResult.temperature();
 		this.aiPromptVersion = analysisResult.promptVersion();
+		applyFeedback(analysisResult.feedback());
+		this.completedAt = now;
+		this.updatedAt = now;
+	}
+
+	private void applyFeedback(CoachFeedback feedback) {
+		CoachFeedback.FeedbackCard primaryCard = firstFeedbackCard(feedback);
+		CoachFeedback.Observation primaryObservation = firstObservation(primaryCard);
 		this.resultOverallStrengthText = feedback.overallStrength().text();
 		this.feedbackCards.clear();
 		this.feedbackCards.addAll(feedback.feedbackCards().stream()
@@ -157,8 +206,6 @@ public class Coaching {
 		this.resultFocusPrescription = String.join("\n", primaryCard.practiceSteps());
 		this.resultNextStepText = primaryCard.expectedEffect();
 		this.resultNextStepAction = "retake_selected_range";
-		this.completedAt = now;
-		this.updatedAt = now;
 	}
 
 	public void attachVideo(String storageKey, String storageUri, OffsetDateTime now) {
@@ -235,6 +282,32 @@ public class Coaching {
 
 	public String getResultSceneIntent() {
 		return resultSceneIntent;
+	}
+
+	public String getInitialQuestion() {
+		return initialQuestion;
+	}
+
+	public CoachingInitialContext getInitialContext() {
+		return new CoachingInitialContext(
+				initialQuestion,
+				initialTranscript,
+				initialAnalysis,
+				List.copyOf(initialMeasurableSignals),
+				initialDiagnosticHypothesis
+		);
+	}
+
+	public String getUserAnswer() {
+		return userAnswer;
+	}
+
+	public String getRefinedSituation() {
+		return refinedSituation;
+	}
+
+	public String getRefinedIntent() {
+		return refinedIntent;
 	}
 
 	public CoachFeedback getFeedback() {
