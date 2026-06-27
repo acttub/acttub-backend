@@ -10,6 +10,7 @@ import java.util.Set;
 import com.loading.acttub_backend.coaching.application.model.ApplicationException;
 import com.loading.acttub_backend.coaching.application.model.CoachingInput;
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
+import com.loading.acttub_backend.coaching.application.model.DiagnosisCommand;
 import com.loading.acttub_backend.coaching.application.model.StoredVideo;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalysisTimeoutException;
@@ -19,6 +20,7 @@ import com.loading.acttub_backend.coaching.application.port.VideoStorage;
 import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.Coaching;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
+import com.loading.acttub_backend.coaching.domain.CoachingDiagnosisResult;
 import com.loading.acttub_backend.coaching.domain.CoachingStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,8 +55,55 @@ public class CoachingService {
 		storeVideo(coaching, video);
 		CoachingAnalysisResult analysisResult = analyze(coaching, video, input);
 
-		coaching.complete(analysisResult, OffsetDateTime.now(clock));
-		return toResponse(coaching, analysisResult.feedback());
+		coaching.markQuestionReady(analysisResult.initialContext(), analysisResult, OffsetDateTime.now(clock));
+		coachingRepository.saveAndFlush(coaching);
+		return toResponse(coaching);
+	}
+
+	@Transactional(noRollbackFor = ApplicationException.class)
+	public CoachingResult diagnose(Long coachingId, DiagnosisCommand command) {
+		String answer = validateDiagnosisCommand(command);
+		Coaching coaching = coachingRepository.findById(coachingId)
+				.orElseThrow(() -> new ApplicationException(
+						"COACHING_NOT_FOUND",
+						"Coaching not found.",
+						Map.of("coachingId", String.valueOf(coachingId))
+				));
+
+		if (coaching.getStatus() != CoachingStatus.QUESTION_READY) {
+			throw new ApplicationException(
+					"COACHING_NOT_READY_FOR_DIAGNOSIS",
+					"Coaching is not ready for diagnosis.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", coaching.getStatus().name())
+			);
+		}
+
+		try {
+			CoachingDiagnosisResult diagnosisResult = coachingAnalyzer.diagnose(
+					toInput(coaching),
+					coaching.getInitialContext(),
+					answer
+			);
+			coaching.completeDiagnosis(answer, diagnosisResult, OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			return toResponse(coaching);
+		} catch (CoachingAnalysisTimeoutException e) {
+			coaching.fail("AI_DIAGNOSIS_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			throw new ApplicationException(
+					"AI_DIAGNOSIS_TIMEOUT",
+					"Coaching diagnosis timed out.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
+			);
+		} catch (RuntimeException e) {
+			coaching.fail("AI_DIAGNOSIS_FAILED", e.getMessage(), OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			throw new ApplicationException(
+					"AI_DIAGNOSIS_FAILED",
+					"Coaching diagnosis failed.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
+			);
+		}
 	}
 
 	private Coaching createAnalyzingCoaching(VideoInput video, CoachingInput input) {
@@ -112,7 +161,8 @@ public class CoachingService {
 	}
 
 	private CoachingResult toResponse(Coaching coaching) {
-		return toResponse(coaching, coaching.getFeedback());
+		CoachFeedback feedback = coaching.getStatus() == CoachingStatus.COMPLETED ? coaching.getFeedback() : null;
+		return toResponse(coaching, feedback);
 	}
 
 	private CoachingResult toResponse(Coaching coaching, CoachFeedback feedback) {
@@ -121,14 +171,33 @@ public class CoachingService {
 				coaching.getStatus().name(),
 				coaching.getCreatedAt(),
 				coaching.getCompletedAt(),
-				new CoachingInput(
-						coaching.getGenre(),
-						coaching.getCustomGenre(),
-						coaching.getSituation(),
-						coaching.getCharacterSetting(),
-						coaching.getSubtext()
-				),
+				toInput(coaching),
+				coaching.getInitialContext(),
+				coaching.getUserAnswer(),
+				coaching.getRefinedSituation(),
+				coaching.getRefinedIntent(),
 				feedback
+		);
+	}
+
+	private String validateDiagnosisCommand(DiagnosisCommand command) {
+		if (command == null || command.normalizedAnswer() == null) {
+			throw new ApplicationException(
+					"INVALID_DIAGNOSIS_REQUEST",
+					"Invalid diagnosis request.",
+					Map.of("fields", List.of("answer"))
+			);
+		}
+		return command.normalizedAnswer();
+	}
+
+	private CoachingInput toInput(Coaching coaching) {
+		return new CoachingInput(
+				coaching.getGenre(),
+				coaching.getCustomGenre(),
+				coaching.getSituation(),
+				coaching.getCharacterSetting(),
+				coaching.getSubtext()
 		);
 	}
 
