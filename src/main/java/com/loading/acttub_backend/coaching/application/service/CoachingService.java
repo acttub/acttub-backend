@@ -95,6 +95,12 @@ public class CoachingService {
 					"Coaching diagnosis timed out.",
 					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
 			);
+		} catch (UnsupportedOperationException e) {
+			throw new ApplicationException(
+					"AI_DIAGNOSIS_UNAVAILABLE",
+					"Coaching diagnosis is unavailable.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", coaching.getStatus().name())
+			);
 		} catch (RuntimeException e) {
 			coaching.fail("AI_DIAGNOSIS_FAILED", e.getMessage(), OffsetDateTime.now(clock));
 			coachingRepository.saveAndFlush(coaching);
@@ -140,7 +146,9 @@ public class CoachingService {
 
 	private CoachingAnalysisResult analyze(Coaching coaching, VideoInput video, CoachingInput input) {
 		try {
-			return coachingAnalyzer.analyze(video, input);
+			CoachingAnalysisResult result = coachingAnalyzer.analyze(video, input);
+			requireInitialContext(result);
+			return result;
 		} catch (CoachingAnalysisTimeoutException e) {
 			coaching.fail("AI_ANALYSIS_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
 			coachingRepository.saveAndFlush(coaching);
@@ -157,6 +165,16 @@ public class CoachingService {
 					"Coaching analysis failed.",
 					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
 			);
+		}
+	}
+
+	private void requireInitialContext(CoachingAnalysisResult result) {
+		if (result == null || result.initialContext() == null
+				|| result.initialContext().question() == null || result.initialContext().question().isBlank()
+				|| result.initialContext().analysis() == null || result.initialContext().analysis().isBlank()
+				|| result.initialContext().diagnosticHypothesis() == null
+				|| result.initialContext().diagnosticHypothesis().isBlank()) {
+			throw new IllegalStateException("Coaching initial context is required.");
 		}
 	}
 

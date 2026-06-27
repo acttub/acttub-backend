@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.loading.acttub_backend.coaching.application.model.ApplicationException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -52,7 +53,10 @@ class ApiExceptionHandler {
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
-	ResponseEntity<ApiErrorEnvelope> handleUnreadableMessage() {
+	ResponseEntity<ApiErrorEnvelope> handleUnreadableMessage(HttpServletRequest request) {
+		if (request.getRequestURI().endsWith("/diagnosis")) {
+			return invalidDiagnosisRequest("body");
+		}
 		return invalidEvaluationRequest("body");
 	}
 
@@ -97,6 +101,14 @@ class ApiExceptionHandler {
 		));
 	}
 
+	private ResponseEntity<ApiErrorEnvelope> invalidDiagnosisRequest(String field) {
+		return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
+				"INVALID_DIAGNOSIS_REQUEST",
+				"Invalid diagnosis request.",
+				Map.of("fields", List.of(field))
+		));
+	}
+
 	private HttpStatus statusFor(String code) {
 		return switch (code) {
 			case "INVALID_COACHING_REQUEST", "INVALID_EVALUATION_REQUEST",
@@ -107,6 +119,7 @@ class ApiExceptionHandler {
 					"COACHING_NOT_READY_FOR_DIAGNOSIS" -> HttpStatus.CONFLICT;
 			case "AI_ANALYSIS_FAILED", "AI_DIAGNOSIS_FAILED" -> HttpStatus.BAD_GATEWAY;
 			case "AI_ANALYSIS_TIMEOUT", "AI_DIAGNOSIS_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
+			case "AI_DIAGNOSIS_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE;
 			case "VIDEO_STORAGE_FAILED" -> HttpStatus.INTERNAL_SERVER_ERROR;
 			default -> HttpStatus.INTERNAL_SERVER_ERROR;
 		};
