@@ -1,8 +1,6 @@
 package com.loading.acttub_backend.coaching;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.emptyOrNullString;
-import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -68,14 +66,14 @@ class CoachingApiIntegrationTest {
 				.andExpect(jsonPath("$.data.input.situation").value("헤어진 연인을 우연히 다시 만난 상황"))
 				.andExpect(jsonPath("$.data.input.characterSetting").value("감정을 쉽게 드러내지 않는 배우 지망생"))
 				.andExpect(jsonPath("$.data.input.subtext").value("아직 미련이 있지만 괜찮은 척한다"))
-				.andExpect(jsonPath("$.data.dialogue.question", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.context.transcript", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.context.analysis", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.context.measurableSignals[0].name", not(emptyOrNullString())))
+				.andExpect(jsonPath("$.data.dialogue.question", notBlank()))
+				.andExpect(jsonPath("$.data.context.transcript", notBlank()))
+				.andExpect(jsonPath("$.data.context.analysis", notBlank()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].name", notBlank()))
 				.andExpect(jsonPath("$.data.context.measurableSignals[0].value", notNullValue()))
-				.andExpect(jsonPath("$.data.context.measurableSignals[0].unit", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.context.measurableSignals[0].evidence", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.context.diagnosticHypothesis", not(emptyOrNullString())))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].unit", notBlank()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].evidence", notBlank()))
+				.andExpect(jsonPath("$.data.context.diagnosticHypothesis", notBlank()))
 				.andExpect(jsonPath("$.data.result").doesNotExist());
 	}
 
@@ -226,14 +224,14 @@ class CoachingApiIntegrationTest {
 				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
 				.andExpect(jsonPath("$.data.completedAt", notNullValue()))
 				.andExpect(jsonPath("$.data.refinedContext.answer").value("상대가 나를 약하게 볼까 봐 미련을 숨기고 싶었어요."))
-				.andExpect(jsonPath("$.data.refinedContext.refinedSituation", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.refinedContext.refinedIntent", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.result.overallStrength.text", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].title", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].observations[0].timecode", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].cause", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].practiceSteps[0]", not(emptyOrNullString())))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect", not(emptyOrNullString())));
+				.andExpect(jsonPath("$.data.refinedContext.refinedSituation", notBlank()))
+				.andExpect(jsonPath("$.data.refinedContext.refinedIntent", notBlank()))
+				.andExpect(jsonPath("$.data.result.overallStrength.text", notBlank()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].title", notBlank()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].observations[0].timecode", notBlank()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].cause", notBlank()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].practiceSteps[0]", notBlank()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect", notBlank()));
 	}
 
 	@Test
@@ -404,6 +402,10 @@ class CoachingApiIntegrationTest {
 		return post("/api/v1/coachings/{coachingId}/diagnosis", coachingId)
 				.contentType("application/json")
 				.content(OBJECT_MAPPER.writeValueAsString(Map.of("answer", answer)));
+	}
+
+	private static org.hamcrest.Matcher<String> notBlank() {
+		return org.hamcrest.Matchers.matchesPattern(".*\\S.*");
 	}
 
 	private MockMultipartFile video(String contentType) {
