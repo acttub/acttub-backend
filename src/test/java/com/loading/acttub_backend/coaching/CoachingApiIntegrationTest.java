@@ -156,7 +156,8 @@ class CoachingApiIntegrationTest {
 		);
 
 		assertThat(cardTitles).hasSize(1);
-		assertThat(observations).hasSize(2);
+		assertThat(observations).hasSize(1);
+		assertThat(observations.getFirst()).isNotBlank();
 		assertThat(practiceSteps).hasSize(3);
 	}
 
