@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -150,6 +151,7 @@ public class Coaching {
 
 	public void markQuestionReady(CoachingInitialContext initialContext, CoachingAnalysisResult analysisResult,
 			OffsetDateTime now) {
+		List<MeasurableSignal> normalizedSignals = normalizedSignals(initialContext);
 		this.status = CoachingStatus.QUESTION_READY;
 		this.aiProvider = analysisResult.provider();
 		this.aiModel = analysisResult.model();
@@ -158,30 +160,49 @@ public class Coaching {
 		this.initialQuestion = initialContext.question();
 		this.initialTranscript = initialContext.transcript();
 		this.initialAnalysis = initialContext.analysis();
-		this.initialMeasurableSignals = new ArrayList<>(initialContext.measurableSignals());
+		this.initialMeasurableSignals = new ArrayList<>(normalizedSignals);
 		this.initialDiagnosticHypothesis = initialContext.diagnosticHypothesis();
 		this.updatedAt = now;
 	}
 
 	public void completeDiagnosis(String answer, CoachingDiagnosisResult diagnosisResult, OffsetDateTime now) {
+		CoachFeedback feedback = requireFeedback(diagnosisResult.feedback());
 		this.status = CoachingStatus.COMPLETED;
 		this.userAnswer = answer;
 		this.refinedSituation = diagnosisResult.refinedSituation();
 		this.refinedIntent = diagnosisResult.refinedIntent();
-		applyFeedback(diagnosisResult.feedback());
+		applyFeedback(feedback);
 		this.completedAt = now;
 		this.updatedAt = now;
 	}
 
 	public void complete(CoachingAnalysisResult analysisResult, OffsetDateTime now) {
+		CoachFeedback feedback = requireFeedback(analysisResult.feedback());
 		this.status = CoachingStatus.COMPLETED;
 		this.aiProvider = analysisResult.provider();
 		this.aiModel = analysisResult.model();
 		this.aiTemperature = analysisResult.temperature();
 		this.aiPromptVersion = analysisResult.promptVersion();
-		applyFeedback(analysisResult.feedback());
+		applyFeedback(feedback);
 		this.completedAt = now;
 		this.updatedAt = now;
+	}
+
+	private List<MeasurableSignal> normalizedSignals(CoachingInitialContext initialContext) {
+		if (initialContext.measurableSignals() == null) {
+			return new ArrayList<>();
+		}
+		return initialContext.measurableSignals().stream()
+				.filter(Objects::nonNull)
+				.toList();
+	}
+
+	private CoachFeedback requireFeedback(CoachFeedback feedback) {
+		if (feedback == null || feedback.overallStrength() == null
+				|| feedback.feedbackCards() == null || feedback.feedbackCards().isEmpty()) {
+			throw new IllegalArgumentException("Feedback is required.");
+		}
+		return feedback;
 	}
 
 	private void applyFeedback(CoachFeedback feedback) {

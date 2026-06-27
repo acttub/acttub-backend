@@ -2,6 +2,8 @@ package com.loading.acttub_backend.coaching.domain;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -36,7 +38,13 @@ public class MeasurableSignalsConverter implements AttributeConverter<List<Measu
 			return new ArrayList<>();
 		}
 		try {
-			return objectMapper.readValue(dbData, typeReference);
+			List<MeasurableSignal> values = objectMapper.readValue(dbData, typeReference);
+			if (values == null) {
+				return new ArrayList<>();
+			}
+			return values.stream()
+					.filter(Objects::nonNull)
+					.collect(Collectors.toCollection(ArrayList::new));
 		}
 		catch (JsonProcessingException exception) {
 			throw new IllegalArgumentException("Failed to deserialize measurable signals.", exception);
