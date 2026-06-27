@@ -199,15 +199,24 @@ public class Coaching {
 
 	private CoachFeedback requireFeedback(CoachFeedback feedback) {
 		if (feedback == null || feedback.overallStrength() == null
-				|| feedback.feedbackCards() == null || feedback.feedbackCards().isEmpty()) {
+				|| feedback.overallStrength().text() == null
+				|| feedback.feedbackCards() == null || feedback.feedbackCards().isEmpty()
+				|| feedback.feedbackCards().stream().anyMatch(Objects::isNull)) {
+			throw new IllegalArgumentException("Feedback is required.");
+		}
+		CoachFeedback.FeedbackCard primaryCard = feedback.feedbackCards().getFirst();
+		if (primaryCard.observations() == null || primaryCard.observations().isEmpty()
+				|| primaryCard.observations().getFirst() == null
+				|| primaryCard.practiceSteps() == null
+				|| primaryCard.practiceSteps().stream().anyMatch(Objects::isNull)) {
 			throw new IllegalArgumentException("Feedback is required.");
 		}
 		return feedback;
 	}
 
 	private void applyFeedback(CoachFeedback feedback) {
-		CoachFeedback.FeedbackCard primaryCard = firstFeedbackCard(feedback);
-		CoachFeedback.Observation primaryObservation = firstObservation(primaryCard);
+		CoachFeedback.FeedbackCard primaryCard = feedback.feedbackCards().getFirst();
+		CoachFeedback.Observation primaryObservation = primaryCard.observations().getFirst();
 		this.resultOverallStrengthText = feedback.overallStrength().text();
 		this.feedbackCards.clear();
 		this.feedbackCards.addAll(feedback.feedbackCards().stream()

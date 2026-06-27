@@ -195,6 +195,36 @@ class CoachingTests {
 	}
 
 	@Test
+	void diagnosisFeedbackWithEmptyObservationsLeavesQuestionReady() {
+		Coaching coaching = questionReadyCoaching();
+
+		assertThatThrownBy(() -> coaching.completeDiagnosis(
+				"상대가 나를 약하게 볼까 봐 숨겼어요.",
+				new CoachingDiagnosisResult(
+						"약하게 보이고 싶지 않아 미련을 숨기는 상황",
+						"미련을 숨기며 상대의 반응을 확인한다",
+						new CoachFeedback(
+								new CoachFeedback.OverallStrength("전반적으로 버티는 선택이 좋았어요."),
+								List.of(new CoachFeedback.FeedbackCard(
+										1,
+										"장면 의도",
+										List.of(),
+										"원인",
+										List.of("처방1", "처방2"),
+										"기대 효과"
+								))
+						)
+				),
+				OffsetDateTime.parse("2026-06-13T00:02:00+09:00")
+		)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("Feedback is required.");
+
+		assertThat(coaching.getStatus()).isEqualTo(CoachingStatus.QUESTION_READY);
+		assertThat(coaching.getCompletedAt()).isNull();
+		assertThat(coaching.getUserAnswer()).isNull();
+	}
+
+	@Test
 	void compatibilityCompleteRequiresFeedbackBeforeMutation() {
 		Coaching coaching = Coaching.analyzing(
 				"영화",
@@ -221,6 +251,44 @@ class CoachingTests {
 				BigDecimal.ZERO,
 				"analysis-v0.1",
 				initialContext
+		), OffsetDateTime.parse("2026-06-13T00:01:00+09:00")))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("Feedback is required.");
+
+		assertThat(coaching.getStatus()).isEqualTo(CoachingStatus.ANALYZING);
+		assertThat(coaching.getCompletedAt()).isNull();
+	}
+
+	@Test
+	void compatibilityCompleteWithNullPracticeStepsLeavesAnalyzing() {
+		Coaching coaching = Coaching.analyzing(
+				"영화",
+				null,
+				"헤어진 연인을 우연히 다시 만난 상황",
+				"감정을 쉽게 드러내지 않는 배우 지망생",
+				"아직 미련이 있지만 괜찮은 척한다",
+				"scene.mp4",
+				"video/mp4",
+				1024L,
+				OffsetDateTime.parse("2026-06-13T00:00:00+09:00")
+		);
+
+		assertThatThrownBy(() -> coaching.complete(new CoachingAnalysisResult(
+				"gemini",
+				"Gemini 3.0 Flash",
+				BigDecimal.ZERO,
+				"analysis-v0.1",
+				new CoachFeedback(
+						new CoachFeedback.OverallStrength("전반적으로 버티는 선택이 좋았어요."),
+						List.of(new CoachFeedback.FeedbackCard(
+								1,
+								"장면 의도",
+								List.of(new CoachFeedback.Observation("0:00-0:15", "관찰")),
+								"원인",
+								null,
+								"기대 효과"
+						))
+				)
 		), OffsetDateTime.parse("2026-06-13T00:01:00+09:00")))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("Feedback is required.");
