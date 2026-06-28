@@ -2,6 +2,7 @@ package com.loading.acttub_backend.coaching;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -18,6 +19,9 @@ import com.loading.acttub_backend.coaching.application.port.CoachingRepository;
 import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.Coaching;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
+import com.loading.acttub_backend.coaching.domain.CoachingConversationMessage;
+import com.loading.acttub_backend.coaching.domain.CoachingDiagnosisResult;
+import com.loading.acttub_backend.coaching.domain.CoachingInitialContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -51,11 +55,19 @@ class CoachingLongAiResultIntegrationTest {
 						)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.coachingId", notNullValue()))
-				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect").value(longText("effect")))
+				.andExpect(jsonPath("$.data.status").value("QUESTION_READY"))
 				.andReturn();
 
 		String coachingId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.coachingId");
+		submitMessage(coachingId, "미련을 숨기고 싶었습니다.", "IN_CONVERSATION");
+		submitMessage(coachingId, "약하게 보이고 싶지 않았습니다.", "IN_CONVERSATION");
+		submitMessage(coachingId, "그래도 상대 반응을 확인하고 싶었습니다.", "READY_FOR_DIAGNOSIS");
+
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/diagnosis", coachingId))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect").value(longText("effect")));
+
 		Coaching coaching = coachingRepository.findById(Long.valueOf(coachingId)).orElseThrow();
 
 		assertThat(coaching.getResultSceneIntent()).isEqualTo(longText("title"));
@@ -81,19 +93,36 @@ class CoachingLongAiResultIntegrationTest {
 
 		@Override
 		public CoachingAnalysisResult analyze(VideoInput video, CoachingInput input) {
-				CoachFeedback feedback = new CoachFeedback(
-						new CoachFeedback.OverallStrength(longText("strength")),
-						List.of(new CoachFeedback.FeedbackCard(
-								1,
-								longText("title"),
-								List.of(new CoachFeedback.Observation(longText("timecode"), longText("observation"))),
-								longText("cause"),
-								List.of(longText("step")),
-								longText("effect")
-						))
+			CoachingInitialContext initialContext = new CoachingInitialContext(
+					"이 장면에서 숨기고 싶은 감정은 무엇인가요?",
+					"안녕. 오랜만이네.",
+					"감정을 참는 선택이 보입니다.",
+					List.of(),
+					"숨기는 이유가 아직 덜 선명합니다."
 			);
-			return new CoachingAnalysisResult("gemini", "Gemini 3.5 Flash", BigDecimal.ZERO, "analysis-v0.2", feedback);
+			return new CoachingAnalysisResult("gemini", "Gemini 3.5 Flash", BigDecimal.ZERO, "analysis-v0.2", initialContext);
 		}
+
+		@Override
+		public CoachingDiagnosisResult diagnose(CoachingInput input, CoachingInitialContext initialContext,
+				List<CoachingConversationMessage> messages, String conversationSummary, String refinedSituation,
+				String refinedIntent) {
+			return new CoachingDiagnosisResult(longFeedback());
+		}
+	}
+
+	private static CoachFeedback longFeedback() {
+		return new CoachFeedback(
+				new CoachFeedback.OverallStrength(longText("strength")),
+				List.of(new CoachFeedback.FeedbackCard(
+						1,
+						longText("title"),
+						List.of(new CoachFeedback.Observation(longText("timecode"), longText("observation"))),
+						longText("cause"),
+						List.of(longText("step")),
+						longText("effect")
+				))
+		);
 	}
 
 	private static String longText(String prefix) {
@@ -108,5 +137,17 @@ class CoachingLongAiResultIntegrationTest {
 		builder.param("characterSetting", "감정을 쉽게 드러내지 않는 배우 지망생");
 		builder.param("subtext", "아직 미련이 있지만 괜찮은 척한다");
 		return builder;
+	}
+
+	private void submitMessage(String coachingId, String answer, String expectedStatus) throws Exception {
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/messages", coachingId)
+						.contentType("application/json")
+						.content("""
+								{
+								  "answer": "%s"
+								}
+								""".formatted(answer)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status").value(expectedStatus));
 	}
 }

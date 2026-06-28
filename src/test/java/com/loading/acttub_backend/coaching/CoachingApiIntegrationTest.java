@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 import com.loading.acttub_backend.coaching.application.port.CoachingRepository;
 import com.loading.acttub_backend.coaching.domain.Coaching;
@@ -34,6 +36,7 @@ import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequ
 @ActiveProfiles("test")
 class CoachingApiIntegrationTest {
 
+	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 	private static final Path TEST_VIDEO_ROOT = createTempDirectory();
 
 	@Autowired
@@ -51,23 +54,31 @@ class CoachingApiIntegrationTest {
 	}
 
 	@Test
-	void createsCompletedCoachingWithAiResult() throws Exception {
+	void createsQuestionReadyCoachingWithInitialContext() throws Exception {
 		MockMultipartFile video = video("video/mp4");
 
 		mockMvc.perform(coachingRequest(video))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.coachingId", notNullValue()))
-				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
+				.andExpect(jsonPath("$.data.status").value("QUESTION_READY"))
+				.andExpect(jsonPath("$.data.completedAt").doesNotExist())
 				.andExpect(jsonPath("$.data.input.genre").value("영화"))
 				.andExpect(jsonPath("$.data.input.situation").value("헤어진 연인을 우연히 다시 만난 상황"))
 				.andExpect(jsonPath("$.data.input.characterSetting").value("감정을 쉽게 드러내지 않는 배우 지망생"))
 				.andExpect(jsonPath("$.data.input.subtext").value("아직 미련이 있지만 괜찮은 척한다"))
-				.andExpect(jsonPath("$.data.result.overallStrength.text", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].title", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].observations[0].timecode", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].cause", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].practiceSteps[0]", notNullValue()))
-				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect", notNullValue()));
+				.andExpect(jsonPath("$.data.dialogue.question", notNullValue()))
+				.andExpect(jsonPath("$.data.conversation.turnIndex").value(0))
+				.andExpect(jsonPath("$.data.conversation.minTurns").value(3))
+				.andExpect(jsonPath("$.data.conversation.maxTurns").value(7))
+				.andExpect(jsonPath("$.data.conversation.diagnosisReady").value(false))
+				.andExpect(jsonPath("$.data.context.transcript", notNullValue()))
+				.andExpect(jsonPath("$.data.context.analysis", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].name", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].value", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].unit", notNullValue()))
+				.andExpect(jsonPath("$.data.context.measurableSignals[0].evidence", notNullValue()))
+				.andExpect(jsonPath("$.data.context.diagnosticHypothesis", notNullValue()))
+				.andExpect(jsonPath("$.data.result").doesNotExist());
 	}
 
 	@Test
@@ -118,7 +129,7 @@ class CoachingApiIntegrationTest {
 
 	@Test
 	void storesFeedbackCardsAsNormalizedRows() throws Exception {
-		String coachingId = createCoaching();
+		String coachingId = createCompletedCoaching();
 
 		List<String> cardTitles = jdbcTemplate.queryForList(
 				"select title from coaching_feedback_cards where coaching_id = ? order by card_order",
@@ -151,6 +162,61 @@ class CoachingApiIntegrationTest {
 		assertThat(cardTitles).hasSize(1);
 		assertThat(observations).hasSize(2);
 		assertThat(practiceSteps).hasSize(3);
+	}
+
+	@Test
+	void continuesConversationBeforeMinimumTurns() throws Exception {
+		String coachingId = createCoaching();
+
+		mockMvc.perform(submitMessage(coachingId, "미련을 들키고 싶지 않았습니다."))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.coachingId").value(coachingId))
+				.andExpect(jsonPath("$.data.status").value("IN_CONVERSATION"))
+				.andExpect(jsonPath("$.data.dialogue.question", notNullValue()))
+				.andExpect(jsonPath("$.data.conversation.turnIndex").value(1))
+				.andExpect(jsonPath("$.data.conversation.minTurns").value(3))
+				.andExpect(jsonPath("$.data.conversation.maxTurns").value(7))
+				.andExpect(jsonPath("$.data.conversation.diagnosisReady").value(false));
+	}
+
+	@Test
+	void becomesReadyForDiagnosisAfterThirdAnswer() throws Exception {
+		String coachingId = createReadyForDiagnosisCoaching();
+
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/diagnosis", coachingId))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.coachingId").value(coachingId))
+				.andExpect(jsonPath("$.data.status").value("COMPLETED"))
+				.andExpect(jsonPath("$.data.completedAt", notNullValue()))
+				.andExpect(jsonPath("$.data.conversation.turnIndex").value(3))
+				.andExpect(jsonPath("$.data.refinedContext.refinedSituation", notNullValue()))
+				.andExpect(jsonPath("$.data.refinedContext.refinedIntent", notNullValue()))
+				.andExpect(jsonPath("$.data.result.overallStrength.text", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].title", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].observations[0].timecode", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].cause", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].practiceSteps[0]", notNullValue()))
+				.andExpect(jsonPath("$.data.result.feedbackCards[0].expectedEffect", notNullValue()));
+	}
+
+	@Test
+	void rejectsDiagnosisBeforeConversationIsReady() throws Exception {
+		String coachingId = createCoaching();
+
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/diagnosis", coachingId))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code").value("COACHING_NOT_READY_FOR_DIAGNOSIS"))
+				.andExpect(jsonPath("$.error.details.status").value("QUESTION_READY"));
+	}
+
+	@Test
+	void rejectsEmptyMessageAnswer() throws Exception {
+		String coachingId = createCoaching();
+
+		mockMvc.perform(submitMessage(coachingId, "   "))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_MESSAGE_REQUEST"))
+				.andExpect(jsonPath("$.error.details.fields[0]").value("answer"));
 	}
 
 	@Test
@@ -209,7 +275,7 @@ class CoachingApiIntegrationTest {
 
 	@Test
 	void evaluatesCompletedCoachingOnce() throws Exception {
-		String coachingId = createCoaching();
+		String coachingId = createCompletedCoaching();
 
 		mockMvc.perform(post("/api/v1/coachings/{coachingId}/evaluation", coachingId)
 						.contentType("application/json")
@@ -236,7 +302,7 @@ class CoachingApiIntegrationTest {
 
 	@Test
 	void rejectsDuplicateEvaluation() throws Exception {
-		String coachingId = createCoaching();
+		String coachingId = createCompletedCoaching();
 		submitEvaluation(coachingId);
 
 		submitEvaluation(coachingId)
@@ -323,6 +389,27 @@ class CoachingApiIntegrationTest {
 		return JsonPath.read(result.getResponse().getContentAsString(), "$.data.coachingId");
 	}
 
+	private String createReadyForDiagnosisCoaching() throws Exception {
+		String coachingId = createCoaching();
+		mockMvc.perform(submitMessage(coachingId, "미련을 들키고 싶지 않았습니다."))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status").value("IN_CONVERSATION"));
+		mockMvc.perform(submitMessage(coachingId, "약해 보이고 싶지 않아서 숨겼습니다."))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status").value("IN_CONVERSATION"));
+		mockMvc.perform(submitMessage(coachingId, "다시 붙잡고 싶지만 먼저 드러내고 싶지는 않았습니다."))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status").value("READY_FOR_DIAGNOSIS"));
+		return coachingId;
+	}
+
+	private String createCompletedCoaching() throws Exception {
+		String coachingId = createReadyForDiagnosisCoaching();
+		mockMvc.perform(post("/api/v1/coachings/{coachingId}/diagnosis", coachingId))
+				.andExpect(status().isCreated());
+		return coachingId;
+	}
+
 	private org.springframework.test.web.servlet.ResultActions submitEvaluation(String coachingId) throws Exception {
 		return mockMvc.perform(post("/api/v1/coachings/{coachingId}/evaluation", coachingId)
 				.contentType("application/json")
@@ -332,6 +419,12 @@ class CoachingApiIntegrationTest {
 						  "comment": ""
 						}
 						"""));
+	}
+
+	private org.springframework.test.web.servlet.RequestBuilder submitMessage(String coachingId, String answer) throws Exception {
+		return post("/api/v1/coachings/{coachingId}/messages", coachingId)
+				.contentType("application/json")
+				.content(OBJECT_MAPPER.writeValueAsString(Map.of("answer", answer)));
 	}
 
 	private MockMultipartFile video(String contentType) {

@@ -65,6 +65,9 @@ class ApiExceptionHandler {
 		if (request.getRequestURI().equals("/api/v1/waitlist")) {
 			return invalidWaitlistRequest("body");
 		}
+		if (request.getRequestURI().endsWith("/messages")) {
+			return invalidMessageRequest("body");
+		}
 		return invalidEvaluationRequest("body");
 	}
 
@@ -117,14 +120,23 @@ class ApiExceptionHandler {
 		));
 	}
 
+	private ResponseEntity<ApiErrorEnvelope> invalidMessageRequest(String field) {
+		return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
+				"INVALID_MESSAGE_REQUEST",
+				"Invalid message request.",
+				Map.of("fields", List.of(field))
+		));
+	}
+
 	private HttpStatus statusFor(String code) {
 		return switch (code) {
-			case "INVALID_COACHING_REQUEST", "INVALID_EVALUATION_REQUEST" -> HttpStatus.BAD_REQUEST;
+			case "INVALID_COACHING_REQUEST", "INVALID_EVALUATION_REQUEST", "INVALID_MESSAGE_REQUEST" -> HttpStatus.BAD_REQUEST;
 			case "PAYLOAD_TOO_LARGE" -> HttpStatus.PAYLOAD_TOO_LARGE;
 			case "COACHING_NOT_FOUND" -> HttpStatus.NOT_FOUND;
-			case "COACHING_NOT_EVALUABLE", "COACHING_EVALUATION_ALREADY_EXISTS" -> HttpStatus.CONFLICT;
-			case "AI_ANALYSIS_FAILED" -> HttpStatus.BAD_GATEWAY;
-			case "AI_ANALYSIS_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
+			case "COACHING_NOT_EVALUABLE", "COACHING_EVALUATION_ALREADY_EXISTS",
+					"COACHING_NOT_READY_FOR_MESSAGE", "COACHING_NOT_READY_FOR_DIAGNOSIS" -> HttpStatus.CONFLICT;
+			case "AI_ANALYSIS_FAILED", "AI_CONVERSATION_FAILED", "AI_DIAGNOSIS_FAILED" -> HttpStatus.BAD_GATEWAY;
+			case "AI_ANALYSIS_TIMEOUT", "AI_CONVERSATION_TIMEOUT", "AI_DIAGNOSIS_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
 			case "VIDEO_STORAGE_FAILED" -> HttpStatus.INTERNAL_SERVER_ERROR;
 			default -> HttpStatus.INTERNAL_SERVER_ERROR;
 		};

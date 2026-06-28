@@ -5,14 +5,18 @@ import java.util.Map;
 
 import com.loading.acttub_backend.coaching.application.model.CoachingResult;
 import com.loading.acttub_backend.coaching.application.model.CoachingInput;
+import com.loading.acttub_backend.coaching.application.model.MessageCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationCommand;
 import com.loading.acttub_backend.coaching.application.model.EvaluationResult;
 import com.loading.acttub_backend.coaching.application.model.VideoInput;
 import com.loading.acttub_backend.coaching.application.service.CoachingService;
 import com.loading.acttub_backend.coaching.application.service.EvaluationService;
+import com.loading.acttub_backend.coaching.domain.CoachingInitialContext;
+import com.loading.acttub_backend.coaching.domain.MeasurableSignal;
 import com.loading.acttub_backend.coaching.presentation.dto.CoachingResponse;
 import com.loading.acttub_backend.coaching.presentation.dto.EvaluationRequest;
 import com.loading.acttub_backend.coaching.presentation.dto.EvaluationResponse;
+import com.loading.acttub_backend.coaching.presentation.dto.MessageRequest;
 import com.loading.acttub_backend.global.api.ApiEnvelope;
 import com.loading.acttub_backend.global.api.ApiException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -88,6 +92,42 @@ public class CoachingController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(result)));
 	}
 
+	@PostMapping(value = "/api/v1/coachings/{coachingId}/messages", consumes = MediaType.APPLICATION_JSON_VALUE)
+	@Operation(
+			summary = "코칭 챗봇 답변 등록",
+			description = "현재 AI 질문에 대한 사용자 답변을 등록하고 다음 질문 또는 진단 준비 상태를 반환합니다."
+	)
+	@ApiResponse(responseCode = "201", description = "코칭 챗봇 메시지 처리 완료")
+	public ResponseEntity<ApiEnvelope<CoachingResponse>> message(
+			@Parameter(description = "코칭 ID")
+			@PathVariable Long coachingId,
+			@RequestBody MessageRequest request
+	) {
+		if (request == null) {
+			throw new ApiException(
+					HttpStatus.BAD_REQUEST,
+					"INVALID_MESSAGE_REQUEST",
+					"Invalid message request.",
+					Map.of("fields", List.of("answer"))
+			);
+		}
+		CoachingResult result = coachingService.message(coachingId, new MessageCommand(request.answer()));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(result)));
+	}
+
+	@PostMapping(value = "/api/v1/coachings/{coachingId}/diagnosis")
+	@Operation(
+			summary = "코칭 최종 진단 생성",
+			description = "저장된 초기 컨텍스트와 챗봇 대화 기록을 바탕으로 최종 진단을 생성합니다."
+	)
+	@ApiResponse(responseCode = "201", description = "코칭 진단 완료")
+	public ResponseEntity<ApiEnvelope<CoachingResponse>> diagnose(
+			@Parameter(description = "코칭 ID")
+			@PathVariable Long coachingId
+	) {
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.data(toResponse(coachingService.diagnose(coachingId))));
+	}
+
 	private CoachingResponse toResponse(CoachingResult result) {
 		return new CoachingResponse(
 				result.coachingId(),
@@ -101,8 +141,66 @@ public class CoachingController {
 						result.input().characterSetting(),
 						result.input().subtext()
 				),
+				toDialogue(result.nextQuestion()),
+				toConversation(result),
+				toInitialContext(result.initialContext()),
+				toRefinedContext(result),
 				result.feedback()
 		);
+	}
+
+	private CoachingResponse.Dialogue toDialogue(String nextQuestion) {
+		if (nextQuestion != null) {
+			return new CoachingResponse.Dialogue(nextQuestion);
+		}
+		return null;
+	}
+
+	private CoachingResponse.Conversation toConversation(CoachingResult result) {
+		if (result.conversation() == null) {
+			return null;
+		}
+		return new CoachingResponse.Conversation(
+				result.conversation().turnIndex(),
+				result.conversation().minTurns(),
+				result.conversation().maxTurns(),
+				result.conversation().diagnosisReady(),
+				result.conversation().reason(),
+				result.conversation().summary()
+		);
+	}
+
+	private CoachingResponse.InitialContext toInitialContext(CoachingInitialContext initialContext) {
+		if (initialContext == null) {
+			return null;
+		}
+		return new CoachingResponse.InitialContext(
+				initialContext.transcript(),
+				initialContext.analysis(),
+				toMeasurableSignals(initialContext.measurableSignals()),
+				initialContext.diagnosticHypothesis()
+		);
+	}
+
+	private List<CoachingResponse.MeasurableSignalResponse> toMeasurableSignals(List<MeasurableSignal> measurableSignals) {
+		if (measurableSignals == null) {
+			return List.of();
+		}
+		return measurableSignals.stream()
+				.map(signal -> new CoachingResponse.MeasurableSignalResponse(
+						signal.name(),
+						signal.value(),
+						signal.unit(),
+						signal.evidence()
+				))
+				.toList();
+	}
+
+	private CoachingResponse.RefinedContext toRefinedContext(CoachingResult result) {
+		if (result.refinedSituation() == null && result.refinedIntent() == null) {
+			return null;
+		}
+		return new CoachingResponse.RefinedContext(result.refinedSituation(), result.refinedIntent());
 	}
 
 	private VideoInput toVideoInput(MultipartFile video) {

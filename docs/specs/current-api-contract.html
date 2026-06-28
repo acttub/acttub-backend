@@ -185,6 +185,7 @@
 		<li><a href="#messages">POST /api/v1/coachings/{coachingId}/messages</a></li>
 		<li><a href="#diagnosis">POST /api/v1/coachings/{coachingId}/diagnosis</a></li>
 		<li><a href="#evaluation">POST /api/v1/coachings/{coachingId}/evaluation</a></li>
+		<li><a href="#waitlist">POST /api/v1/waitlist</a></li>
 		<li><a href="#errors">오류 코드 목록</a></li>
 	</ul>
 
@@ -266,6 +267,13 @@
 		</tr>
 		</thead>
 		<tbody>
+		<tr>
+			<td><span class="method">POST</span></td>
+			<td><code>/api/v1/waitlist</code></td>
+			<td><code>application/json</code></td>
+			<td class="success-code">201</td>
+			<td>비공개 테스트 사전 등록 이메일과 선택 정보를 저장합니다.</td>
+		</tr>
 		<tr>
 			<td><span class="method">POST</span></td>
 			<td><code>/api/v1/coachings</code></td>
@@ -496,6 +504,80 @@
   }
 }</code></pre>
 
+	<h2 id="waitlist" class="endpoint"><span class="method">POST</span><code>/api/v1/waitlist</code></h2>
+	<p>비공개 테스트 오픈 안내를 받을 이메일을 사전 등록합니다.</p>
+
+	<h3>요청</h3>
+	<pre><code>{
+  "email": "you@example.com",
+  "actorStatus": "배우 지망생",
+  "helpTopic": "대본 분석",
+  "consent": true,
+  "website": ""
+}</code></pre>
+
+	<table>
+		<thead>
+		<tr>
+			<th>필드</th>
+			<th>타입</th>
+			<th>필수</th>
+			<th>검증/정규화</th>
+		</tr>
+		</thead>
+		<tbody>
+		<tr>
+			<td><code>email</code></td>
+			<td>string</td>
+			<td>예</td>
+			<td>이메일 형식이어야 하며, 소문자로 정규화해 저장합니다.</td>
+		</tr>
+		<tr>
+			<td><code>actorStatus</code></td>
+			<td>string</td>
+			<td>아니오</td>
+			<td><code>연기 입시 준비 중</code>, <code>연극영화과 재학 중</code>, <code>배우 지망생</code>, <code>현역 배우</code>, <code>취미로 연기 연습 중</code>, <code>기타</code> 중 하나입니다.</td>
+		</tr>
+		<tr>
+			<td><code>helpTopic</code></td>
+			<td>string</td>
+			<td>아니오</td>
+			<td><code>대본 분석</code>, <code>인물의 목적 찾기</code>, <code>이전 상황 감정 정리</code>, <code>현재 감정선 정리</code>, <code>서브텍스트 정리</code>, <code>기타</code> 중 하나입니다.</td>
+		</tr>
+		<tr>
+			<td><code>consent</code></td>
+			<td>boolean</td>
+			<td>예</td>
+			<td><code>true</code>여야 저장합니다.</td>
+		</tr>
+		<tr>
+			<td><code>website</code></td>
+			<td>string</td>
+			<td>아니오</td>
+			<td>봇 방지용 honeypot 필드입니다. 값이 있으면 저장하지 않고 성공처럼 응답합니다.</td>
+		</tr>
+		</tbody>
+	</table>
+
+	<h3>201 응답</h3>
+	<pre><code>{
+  "data": {
+    "accepted": true,
+    "waitlistId": "1",
+    "email": "you@example.com",
+    "actorStatus": "배우 지망생",
+    "helpTopic": "대본 분석",
+    "createdAt": "2026-06-28T02:09:00+09:00"
+  }
+}</code></pre>
+
+	<h3>201 응답: honeypot</h3>
+	<pre><code>{
+  "data": {
+    "accepted": true
+  }
+}</code></pre>
+
 	<h2 id="messages" class="endpoint"><span class="method">POST</span><code>/api/v1/coachings/{coachingId}/messages</code></h2>
 	<p>현재 AI 질문에 대한 사용자 답변을 제출합니다. 서버는 답변을 저장하고 다음 질문 또는 진단 준비 상태를 반환합니다.</p>
 
@@ -641,6 +723,12 @@
 		</tr>
 		<tr>
 			<td>400</td>
+			<td><code>INVALID_WAITLIST_REQUEST</code></td>
+			<td><code>POST /api/v1/waitlist</code></td>
+			<td>이메일, 수집 동의, 선택값이 유효하지 않습니다.</td>
+		</tr>
+		<tr>
+			<td>400</td>
 			<td><code>INVALID_MESSAGE_REQUEST</code></td>
 			<td><code>POST /api/v1/coachings/{coachingId}/messages</code></td>
 			<td>메시지 요청 본문 또는 답변이 유효하지 않습니다.</td>
@@ -668,6 +756,12 @@
 			<td><code>COACHING_NOT_FOUND</code></td>
 			<td>메시지, 진단, 평가 API</td>
 			<td>요청한 코칭 ID가 존재하지 않습니다.</td>
+		</tr>
+		<tr>
+			<td>409</td>
+			<td><code>WAITLIST_ALREADY_REGISTERED</code></td>
+			<td><code>POST /api/v1/waitlist</code></td>
+			<td>이미 사전 등록된 이메일입니다.</td>
 		</tr>
 		<tr>
 			<td>409</td>
