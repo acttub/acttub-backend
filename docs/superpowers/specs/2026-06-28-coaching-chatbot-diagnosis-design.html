@@ -7,14 +7,12 @@
 	<style>
 		:root {
 			color-scheme: light;
-			--text: #1f2937;
-			--muted: #64748b;
-			--line: #d7dee8;
+			--text: #172033;
+			--muted: #5f6f86;
+			--line: #d8e0ea;
 			--soft: #f6f8fb;
 			--accent: #0f6b7f;
-			--accent-soft: #e7f4f7;
 			--method: #155e75;
-			--danger: #9f1239;
 		}
 		* {
 			box-sizing: border-box;
@@ -34,10 +32,10 @@
 		h1, h2, h3 {
 			margin: 0;
 			line-height: 1.25;
+			letter-spacing: 0;
 		}
 		h1 {
 			font-size: 32px;
-			letter-spacing: 0;
 		}
 		h2 {
 			margin-top: 44px;
@@ -51,9 +49,6 @@
 		}
 		p, ul, ol {
 			margin: 12px 0;
-		}
-		li + li {
-			margin-top: 4px;
 		}
 		code {
 			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -92,12 +87,6 @@
 			background: var(--soft);
 			color: #334155;
 		}
-		.warning {
-			padding: 12px 14px;
-			border-left: 4px solid var(--danger);
-			background: #fff1f2;
-			color: #4c0519;
-		}
 		.endpoint {
 			display: flex;
 			flex-wrap: wrap;
@@ -120,7 +109,7 @@
 			margin-right: 6px;
 			padding: 2px 7px;
 			border-radius: 4px;
-			background: var(--accent-soft);
+			background: #e7f4f7;
 			color: var(--accent);
 			font-size: 12px;
 			font-weight: 700;
@@ -130,496 +119,299 @@
 <body>
 <main>
 	<h1>SOMA-152 코칭 챗봇형 진단 설계</h1>
-	<p class="lead">
-		작성일: 2026-06-28 · 대상 브랜치: <code>feature/SOMA-152-chatbot-acting-diagnosis</code>
-	</p>
+	<p class="lead">작성일: 2026-06-28 · 대상 브랜치: <code>feature/SOMA-152-chatbot-acting-diagnosis</code></p>
 
 	<h2>목표</h2>
 	<p>
-		기존 <code>POST /api/v1/coachings</code>는 영상과 배우가 입력한 맥락을 받은 뒤 AI 분석 결과를 즉시 최종 코칭 카드처럼 반환했다.
-		SOMA-152에서는 이 흐름을 챗봇형 진단으로 바꾼다. 첫 요청에서는 최종 평가를 내리지 않고, AI가 영상 기반 초기 컨텍스트와 배우에게 물어볼 질문 하나를 생성한다.
-		사용자가 그 질문에 답하면 서버는 저장된 초기 컨텍스트와 사용자 답변을 함께 사용해 배우의 의도와 상황을 더 구체화한 최종 진단을 만든다.
+		코칭 생성 직후 최종 평가를 내리지 않고, AI가 배우와 챗봇 형태로 대화하며 연기 의도와 장면 상황을 구체화한 뒤 최종 진단을 생성한다.
+		첫 영상 업로드 응답은 초기 분석 컨텍스트와 첫 질문을 반환한다. 이후 사용자는 메시지 API로 답변하고, AI는 충분한 맥락이 모일 때까지 다음 질문을 생성한다.
 	</p>
 
 	<h2>결정 사항</h2>
 	<ul>
-		<li><span class="badge">상태</span><code>POST /api/v1/coachings</code>는 <code>COMPLETED</code>가 아니라 <code>QUESTION_READY</code>를 반환한다.</li>
-		<li><span class="badge">대화</span>첫 응답에는 챗봇에서 물어볼 질문을 하나만 포함한다.</li>
-		<li><span class="badge">대본</span>대본은 사용자가 별도 입력하지 않고, AI가 영상에서 들리는 대사를 받아쓴 <code>transcript</code>로 둔다.</li>
-		<li><span class="badge">객관 신호</span>수치화 가능한 객관적 평가는 점수가 아니라 측정 가능한 관찰값으로 둔다.</li>
-		<li><span class="badge">주관 진단</span>수치화 불가능한 주관적 평가는 확정 평가가 아니라 코치의 진단 가설로 둔다.</li>
-		<li><span class="badge">최종 진단</span>사용자 답변 후에는 영상을 다시 업로드하지 않고, 저장된 초기 분석 컨텍스트와 사용자 답변만으로 AI를 다시 호출한다.</li>
+		<li><span class="badge">초기 응답</span><code>POST /api/v1/coachings</code>는 <code>QUESTION_READY</code>와 첫 질문을 반환한다.</li>
+		<li><span class="badge">대화 API</span><code>POST /api/v1/coachings/{coachingId}/messages</code>가 사용자 답변 저장과 다음 AI 질문 생성을 담당한다.</li>
+		<li><span class="badge">턴 정책</span>대화 종료 판단은 AI가 하되 <code>min-turns=3</code>, <code>max-turns=7</code>로 제한한다.</li>
+		<li><span class="badge">최소 턴</span>1~2번째 답변 후에는 AI가 충분하다고 판단해도 다음 질문을 생성한다.</li>
+		<li><span class="badge">최대 턴</span>7번째 답변 후에는 AI 판단과 무관하게 <code>READY_FOR_DIAGNOSIS</code>로 전환한다.</li>
+		<li><span class="badge">최종 진단</span><code>READY_FOR_DIAGNOSIS</code> 상태에서 <code>POST /api/v1/coachings/{coachingId}/diagnosis</code>를 호출해 최종 진단을 생성한다.</li>
+		<li><span class="badge">영상 재분석 없음</span>메시지와 최종 진단 단계에서는 영상을 다시 업로드하거나 다시 분석하지 않는다.</li>
 	</ul>
 
 	<h2>범위</h2>
 	<h3>포함</h3>
 	<ul>
-		<li>코칭 상태 <code>QUESTION_READY</code> 추가</li>
-		<li>초기 챗봇 컨텍스트 응답 DTO 추가</li>
-		<li>초기 AI 분석 결과 저장 필드 추가</li>
-		<li>사용자 답변을 받는 최종 진단 API 추가</li>
-		<li>Gemini 프롬프트와 파서 분리 또는 확장</li>
-		<li>통합 테스트와 AI 파서 단위 테스트 추가</li>
+		<li>상태 <code>QUESTION_READY</code>, <code>IN_CONVERSATION</code>, <code>READY_FOR_DIAGNOSIS</code> 추가 또는 정리</li>
+		<li>대화 턴 저장 모델 추가</li>
+		<li>대화 정책 설정 <code>app.coaching.conversation.min-turns=3</code>, <code>max-turns=7</code> 추가</li>
+		<li>메시지 API 추가</li>
+		<li>Gemini 대화 지속/종료 판단 프롬프트 추가</li>
+		<li>누적 대화 컨텍스트 기반 최종 진단 API 수정</li>
+		<li>API 문서, 통합 테스트, 도메인 테스트, AI 파서 테스트 갱신</li>
 	</ul>
 
 	<h3>제외</h3>
 	<ul>
-		<li>여러 번 이어지는 다중 턴 챗봇 대화</li>
-		<li>사용자 답변 단계에서 영상 재분석</li>
-		<li>사용자가 원문 대본을 업로드하거나 입력하는 기능</li>
+		<li>실시간 스트리밍 응답</li>
+		<li>사용자가 대화 턴 수를 요청마다 직접 지정하는 기능</li>
+		<li>대화 중 영상 재업로드 또는 영상 재분석</li>
 		<li>코칭 결과 조회 API 신설</li>
 		<li>비동기 작업 큐 도입</li>
 	</ul>
 
-	<h2>사용자 흐름</h2>
-	<ol>
-		<li>사용자가 영상, 장르, 상황, 인물 설정, 선택 서브텍스트를 업로드한다.</li>
-		<li>서버는 영상을 저장하고 AI에 초기 분석을 요청한다.</li>
-		<li>AI는 질문 하나, 영상 대사 transcript, 초기 분석, 측정 가능한 관찰 신호, 진단 가설을 반환한다.</li>
-		<li>서버는 코칭을 <code>QUESTION_READY</code> 상태로 저장하고 초기 컨텍스트를 응답한다.</li>
-		<li>프론트는 질문을 챗봇 메시지로 보여주고 사용자의 답변을 받는다.</li>
-		<li>프론트는 <code>POST /api/v1/coachings/{coachingId}/diagnosis</code>로 답변을 제출한다.</li>
-		<li>서버는 저장된 초기 컨텍스트와 사용자 답변으로 AI에 최종 진단을 요청한다.</li>
-		<li>서버는 구체화된 상황과 의도, 최종 진단 카드를 저장하고 <code>COMPLETED</code> 상태로 응답한다.</li>
-	</ol>
-
-	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings</code></h2>
-	<p>
-		연기 영상을 업로드하고 챗봇 질문을 생성한다. 기존 검증 규칙은 유지한다.
-		성공 시 HTTP 상태는 기존과 동일하게 <code>201 Created</code>를 사용한다.
-	</p>
-
-	<h3>요청</h3>
-	<table>
-		<thead>
-		<tr>
-			<th>필드</th>
-			<th>타입</th>
-			<th>필수</th>
-			<th>설명</th>
-		</tr>
-		</thead>
-		<tbody>
-		<tr>
-			<td><code>video</code></td>
-			<td>file</td>
-			<td>예</td>
-			<td>허용 MIME type은 <code>video/mp4</code>, <code>video/quicktime</code>, <code>video/webm</code>이다.</td>
-		</tr>
-		<tr>
-			<td><code>genre</code></td>
-			<td>string</td>
-			<td>예</td>
-			<td><code>연극</code>, <code>영화</code>, <code>뮤지컬</code>, <code>드라마</code>, <code>기타</code> 중 하나다.</td>
-		</tr>
-		<tr>
-			<td><code>customGenre</code></td>
-			<td>string</td>
-			<td>조건부</td>
-			<td><code>genre=기타</code>일 때 필수다.</td>
-		</tr>
-		<tr>
-			<td><code>situation</code></td>
-			<td>string</td>
-			<td>예</td>
-			<td>배우가 처음 입력한 장면 상황이다.</td>
-		</tr>
-		<tr>
-			<td><code>characterSetting</code></td>
-			<td>string</td>
-			<td>예</td>
-			<td>배우가 처음 입력한 인물 설정이다.</td>
-		</tr>
-		<tr>
-			<td><code>subtext</code></td>
-			<td>string</td>
-			<td>아니오</td>
-			<td>배우가 처음 입력한 서브텍스트다. 비어 있으면 <code>null</code>로 정규화한다.</td>
-		</tr>
-		</tbody>
-	</table>
-
-	<h3>201 응답</h3>
-	<pre><code>{
-  "data": {
-    "coachingId": "1",
-    "status": "QUESTION_READY",
-    "createdAt": "2026-06-28T14:10:00+09:00",
-    "completedAt": null,
-    "input": {
-      "genre": "영화",
-      "customGenre": null,
-      "situation": "헤어진 연인을 우연히 다시 만난 상황",
-      "characterSetting": "감정을 쉽게 드러내지 않는 배우 지망생",
-      "subtext": "아직 미련이 있지만 괜찮은 척한다"
-    },
-    "dialogue": {
-      "question": "이 장면에서 상대에게 가장 들키고 싶지 않았던 감정은 무엇이었나요?"
-    },
-    "context": {
-      "transcript": "안녕. 오랜만이네. 잘 지냈어?",
-      "analysis": "초반에는 괜찮은 척하는 표면이 유지되지만, 중간 멈춤에서 미련이 새어 나오는 흐름이 보입니다.",
-      "measurableSignals": [
-        {
-          "name": "pauseCount",
-          "value": 3,
-          "unit": "count",
-          "evidence": "0:12, 0:28, 0:41에서 대사 사이 멈춤이 확인됩니다."
-        },
-        {
-          "name": "longestPauseSeconds",
-          "value": 2.4,
-          "unit": "seconds",
-          "evidence": "0:28 이후 약 2.4초 동안 다음 대사로 넘어가지 않습니다."
-        }
-      ],
-      "diagnosticHypothesis": "상대를 놓지 못한 마음은 보이지만, 왜 그것을 숨겨야 하는지가 아직 선명하지 않은 것 같아요."
-    }
-  }
-}</code></pre>
-
-	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings/{coachingId}/diagnosis</code></h2>
-	<p>
-		챗봇 질문에 대한 사용자 답변을 받아 최종 진단을 생성한다. 이 단계에서는 영상을 다시 업로드하거나 다시 분석하지 않는다.
-	</p>
-
-	<h3>요청</h3>
-	<pre><code>{
-  "answer": "상대가 나를 약하게 볼까 봐 미련을 숨기고 싶었어요."
-}</code></pre>
-
-	<table>
-		<thead>
-		<tr>
-			<th>필드</th>
-			<th>타입</th>
-			<th>필수</th>
-			<th>검증</th>
-		</tr>
-		</thead>
-		<tbody>
-		<tr>
-			<td><code>answer</code></td>
-			<td>string</td>
-			<td>예</td>
-			<td>앞뒤 공백 제거 후 비어 있으면 <code>INVALID_DIAGNOSIS_REQUEST</code>로 거부한다.</td>
-		</tr>
-		</tbody>
-	</table>
-
-	<h3>201 응답</h3>
-	<pre><code>{
-  "data": {
-    "coachingId": "1",
-    "status": "COMPLETED",
-    "createdAt": "2026-06-28T14:10:00+09:00",
-    "completedAt": "2026-06-28T14:12:30+09:00",
-    "input": {
-      "genre": "영화",
-      "customGenre": null,
-      "situation": "헤어진 연인을 우연히 다시 만난 상황",
-      "characterSetting": "감정을 쉽게 드러내지 않는 배우 지망생",
-      "subtext": "아직 미련이 있지만 괜찮은 척한다"
-    },
-    "refinedContext": {
-      "answer": "상대가 나를 약하게 볼까 봐 미련을 숨기고 싶었어요.",
-      "refinedSituation": "헤어진 상대 앞에서 미련은 남아 있지만 약하게 보이고 싶지 않아 평정심을 유지하려는 상황",
-      "refinedIntent": "미련을 숨기면서도 상대가 자신을 쉽게 지나치지 못하게 만들고 싶다"
-    },
-    "result": {
-      "overallStrength": {
-        "text": "전반적으로 감정을 바로 터뜨리지 않고 버티는 선택이 장면의 방향과 잘 맞았어요."
-      },
-      "feedbackCards": [
-        {
-          "order": 1,
-          "title": "상대에게 약하게 보이지 않으려는 이유를 첫 멈춤 전에 더 분명히 잡아보세요",
-          "observations": [
-            {
-              "timecode": "0:28",
-              "text": "대사 사이 멈춤이 길어지며 다음 말을 고르는 시간이 보였어요."
-            }
-          ],
-          "cause": "왜냐면 미련을 숨기는 선택은 보이지만, 약하게 보이고 싶지 않다는 방어의 이유가 몸과 시선에 아직 충분히 걸리지 않은 것 같아요.",
-          "practiceSteps": [
-            "첫 대사 전 상대가 나를 불쌍하게 보는 장면을 한 번 떠올리고 시선을 2초 고정하세요.",
-            "0:28 지점의 멈춤에서는 고개를 숙이지 말고 숨만 한 번 삼키세요.",
-            "그 상태로 첫 세 문장만 바로 다시 녹화하세요."
-          ],
-          "expectedEffect": "그럼 감정을 누르는 이유가 선명해져서 장면이 평가보다 진단처럼 더 구체적으로 잡혀요."
-        }
-      ]
-    }
-  }
-}</code></pre>
-
-	<h2>도메인 모델</h2>
-	<p>
-		기존 <code>Coaching</code> 엔티티는 코칭 요청, 영상 저장 정보, AI 메타데이터, 최종 피드백 카드를 함께 가진다.
-		이번 변경에서는 초기 분석 컨텍스트와 사용자 답변 기반 구체화 값을 같은 코칭 생명주기에 추가한다.
-	</p>
+	<h2>상태 흐름</h2>
+	<pre><code>ANALYZING
+  -> QUESTION_READY        // 초기 분석과 첫 질문 생성 완료
+  -> IN_CONVERSATION       // 답변을 받았고 다음 질문이 남아 있음
+  -> READY_FOR_DIAGNOSIS   // 최소 3턴 이후 충분하거나 최대 7턴 도달
+  -> COMPLETED             // 최종 진단 생성 완료
+  -> FAILED                // 영상 저장, AI 분석, 대화, 진단 실패</code></pre>
 
 	<table>
 		<thead>
 		<tr>
 			<th>상태</th>
 			<th>의미</th>
-			<th>허용 동작</th>
+			<th>허용 API</th>
 		</tr>
 		</thead>
 		<tbody>
 		<tr>
-			<td><code>ANALYZING</code></td>
-			<td>영상 저장 또는 초기 AI 분석 중</td>
-			<td>내부 처리만 허용</td>
+			<td><code>QUESTION_READY</code></td>
+			<td>첫 AI 질문이 준비된 상태</td>
+			<td><code>POST /messages</code></td>
 		</tr>
 		<tr>
-			<td><code>QUESTION_READY</code></td>
-			<td>초기 분석과 챗봇 질문 생성 완료</td>
-			<td>사용자 답변 제출 가능</td>
+			<td><code>IN_CONVERSATION</code></td>
+			<td>다음 질문이 남아 있어 사용자 답변을 기다리는 상태</td>
+			<td><code>POST /messages</code></td>
+		</tr>
+		<tr>
+			<td><code>READY_FOR_DIAGNOSIS</code></td>
+			<td>최종 진단에 필요한 대화 맥락이 충분한 상태</td>
+			<td><code>POST /diagnosis</code></td>
 		</tr>
 		<tr>
 			<td><code>COMPLETED</code></td>
-			<td>사용자 답변을 반영한 최종 진단 완료</td>
-			<td>평가 등록 가능</td>
-		</tr>
-		<tr>
-			<td><code>FAILED</code></td>
-			<td>영상 저장, 초기 분석, 최종 진단 중 실패</td>
-			<td>추가 처리 불가</td>
+			<td>최종 진단 완료</td>
+			<td><code>POST /evaluation</code></td>
 		</tr>
 		</tbody>
 	</table>
 
-	<h2>DB 변경</h2>
-	<p>
-		PostgreSQL과 테스트 DB 마이그레이션을 모두 추가한다. 객관 신호는 구조가 바뀔 가능성이 있으므로 JSON 문자열로 저장하고, API 응답에서는 타입 있는 DTO로 변환한다.
-	</p>
+	<h2>사용자 흐름</h2>
+	<ol>
+		<li>사용자가 영상, 장르, 상황, 인물 설정, 선택 서브텍스트를 업로드한다.</li>
+		<li>서버는 영상을 저장하고 AI 초기 분석을 요청한다.</li>
+		<li>AI는 대본, 초기 분석, 측정 가능한 관찰 신호, 주관적 진단 가설, 첫 질문을 반환한다.</li>
+		<li>서버는 첫 질문을 assistant 메시지로 저장하고 <code>QUESTION_READY</code>를 응답한다.</li>
+		<li>사용자가 현재 질문에 답하면 프론트는 <code>POST /messages</code>로 답변을 제출한다.</li>
+		<li>서버는 답변을 user 메시지로 저장하고, 누적 대화와 정책을 AI에 전달한다.</li>
+		<li>1~2턴이면 반드시 다음 질문을 생성한다.</li>
+		<li>3~6턴이면 AI가 충분성을 판단해 다음 질문 또는 <code>READY_FOR_DIAGNOSIS</code>를 응답한다.</li>
+		<li>7턴이면 강제로 <code>READY_FOR_DIAGNOSIS</code>를 응답한다.</li>
+		<li>프론트가 <code>POST /diagnosis</code>를 호출하면 서버는 누적 대화 요약과 구체화된 상황/의도로 최종 진단을 생성한다.</li>
+	</ol>
 
-	<table>
-		<thead>
-		<tr>
-			<th>컬럼</th>
-			<th>타입</th>
-			<th>설명</th>
-		</tr>
-		</thead>
-		<tbody>
-		<tr>
-			<td><code>initial_question</code></td>
-			<td>text</td>
-			<td>챗봇이 사용자에게 물어볼 질문 하나</td>
-		</tr>
-		<tr>
-			<td><code>initial_transcript</code></td>
-			<td>text</td>
-			<td>AI가 영상에서 받아쓴 대사</td>
-		</tr>
-		<tr>
-			<td><code>initial_analysis</code></td>
-			<td>text</td>
-			<td>영상 기반 초기 분석 요약</td>
-		</tr>
-		<tr>
-			<td><code>initial_measurable_signals_json</code></td>
-			<td>text</td>
-			<td>측정 가능한 관찰 신호 배열의 JSON 문자열</td>
-		</tr>
-		<tr>
-			<td><code>initial_diagnostic_hypothesis</code></td>
-			<td>text</td>
-			<td>코치의 진단 가설</td>
-		</tr>
-		<tr>
-			<td><code>user_answer</code></td>
-			<td>text</td>
-			<td>챗봇 질문에 대한 사용자 답변</td>
-		</tr>
-		<tr>
-			<td><code>refined_situation</code></td>
-			<td>text</td>
-			<td>초기 입력과 사용자 답변을 함께 반영해 구체화한 상황</td>
-		</tr>
-		<tr>
-			<td><code>refined_intent</code></td>
-			<td>text</td>
-			<td>초기 입력과 사용자 답변을 함께 반영해 구체화한 연기 의도</td>
-		</tr>
-		</tbody>
-	</table>
-
-	<h2>AI 계약</h2>
-	<h3>초기 분석 응답</h3>
-	<p>
-		초기 분석 프롬프트는 최종 평가 카드 대신 챗봇 질문과 컨텍스트를 반환하도록 바꾼다.
-		출력은 JSON 객체 하나로 제한하고, 서버 파서는 필수 필드를 검증한다.
-	</p>
+	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings</code></h2>
+	<p>연기 영상을 업로드하고 초기 분석 컨텍스트와 첫 질문을 생성한다.</p>
 	<pre><code>{
-  "question": "string",
-  "transcript": "string",
-  "analysis": "string",
-  "measurableSignals": [
-    {
-      "name": "pauseCount",
-      "value": 3,
-      "unit": "count",
-      "evidence": "string"
-    }
-  ],
-  "diagnosticHypothesis": "string"
-}</code></pre>
-
-	<h3>최종 진단 응답</h3>
-	<p>
-		최종 진단 프롬프트는 영상 파일 없이 아래 컨텍스트를 전달한다.
-	</p>
-	<ul>
-		<li>사용자가 처음 입력한 <code>genre</code>, <code>situation</code>, <code>characterSetting</code>, <code>subtext</code></li>
-		<li>초기 분석의 <code>question</code>, <code>transcript</code>, <code>analysis</code>, <code>measurableSignals</code>, <code>diagnosticHypothesis</code></li>
-		<li>사용자 답변 <code>answer</code></li>
-	</ul>
-	<p>
-		응답은 구체화된 맥락과 기존 피드백 카드 구조를 함께 반환한다.
-	</p>
-	<pre><code>{
-  "refinedSituation": "string",
-  "refinedIntent": "string",
-  "feedback": {
-    "overallStrength": {
-      "text": "string"
+  "data": {
+    "coachingId": "1",
+    "status": "QUESTION_READY",
+    "dialogue": {
+      "question": "이 장면에서 상대에게 가장 들키고 싶지 않았던 감정은 무엇이었나요?"
     },
-    "feedbackCards": [
-      {
-        "order": 1,
-        "title": "string",
-        "observations": [
-          {
-            "timecode": "string",
-            "text": "string"
-          }
-        ],
-        "cause": "string",
-        "practiceSteps": ["string"],
-        "expectedEffect": "string"
-      }
-    ]
+    "conversation": {
+      "turnIndex": 0,
+      "minTurns": 3,
+      "maxTurns": 7,
+      "diagnosisReady": false
+    },
+    "context": {
+      "transcript": "안녕. 오랜만이네.",
+      "analysis": "시선 회피와 짧은 호흡이 먼저 관찰됩니다.",
+      "measurableSignals": [
+        {
+          "name": "pause_before_first_line",
+          "value": 2.0,
+          "unit": "초",
+          "evidence": "첫 대사 전 약 2초간 정지"
+        }
+      ],
+      "diagnosticHypothesis": "숨기려는 감정의 이유가 아직 덜 구체화되어 있습니다."
+    }
   }
 }</code></pre>
 
-	<h2>애플리케이션 구조</h2>
-	<table>
-		<thead>
-		<tr>
-			<th>영역</th>
-			<th>변경</th>
-		</tr>
-		</thead>
-		<tbody>
-		<tr>
-			<td>Controller</td>
-			<td><code>POST /api/v1/coachings</code> 응답 DTO를 초기 챗봇 응답으로 변경하고, <code>POST /api/v1/coachings/{coachingId}/diagnosis</code>를 추가한다.</td>
-		</tr>
-		<tr>
-			<td>Service</td>
-			<td>기존 <code>create</code>는 초기 분석까지만 수행한다. 새 진단 서비스 메서드는 코칭 조회, 상태 검증, 답변 검증, 최종 AI 호출, 완료 저장을 담당한다.</td>
-		</tr>
-		<tr>
-			<td>Port</td>
-			<td><code>CoachingAnalyzer</code>를 초기 분석과 최종 진단을 모두 표현할 수 있게 확장하거나, <code>CoachingDiagnosisGenerator</code> 같은 별도 포트를 둔다. 구현 단계에서는 변경 범위가 작은 쪽을 선택한다.</td>
-		</tr>
-		<tr>
-			<td>Domain</td>
-			<td><code>Coaching</code>에 <code>markQuestionReady</code>, <code>completeDiagnosis</code> 같은 상태 전이 메서드를 추가한다.</td>
-		</tr>
-		<tr>
-			<td>Infrastructure</td>
-			<td>Gemini 구현은 초기 분석 프롬프트와 최종 진단 프롬프트를 분리하고, 각각 별도 JSON 파서를 가진다.</td>
-		</tr>
-		<tr>
-			<td>Persistence</td>
-			<td>새 컬럼을 엔티티에 매핑하고 마이그레이션을 추가한다.</td>
-		</tr>
-		</tbody>
-	</table>
+	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings/{coachingId}/messages</code></h2>
+	<p>현재 AI 질문에 대한 사용자 답변을 제출한다. 응답은 다음 질문 또는 진단 준비 상태다.</p>
+	<h3>요청</h3>
+	<pre><code>{
+  "answer": "미련을 들키면 내가 아직 약한 사람처럼 보일까 봐 숨겼습니다."
+}</code></pre>
+
+	<h3>다음 질문 응답</h3>
+	<pre><code>{
+  "data": {
+    "coachingId": "1",
+    "status": "IN_CONVERSATION",
+    "dialogue": {
+      "question": "그 약해 보이고 싶지 않은 마음은 상대를 밀어내려는 선택인가요, 다시 붙잡고 싶은 마음을 숨기는 선택인가요?"
+    },
+    "conversation": {
+      "turnIndex": 1,
+      "minTurns": 3,
+      "maxTurns": 7,
+      "diagnosisReady": false,
+      "reason": "최소 3턴 전이므로 의도 구체화를 계속합니다."
+    }
+  }
+}</code></pre>
+
+	<h3>진단 준비 응답</h3>
+	<pre><code>{
+  "data": {
+    "coachingId": "1",
+    "status": "READY_FOR_DIAGNOSIS",
+    "conversation": {
+      "turnIndex": 4,
+      "minTurns": 3,
+      "maxTurns": 7,
+      "diagnosisReady": true,
+      "summary": "사용자는 미련을 숨기는 이유가 상대에게 약해 보이고 싶지 않기 때문이라고 구체화했습니다."
+    },
+    "refinedContext": {
+      "refinedSituation": "재회한 상대 앞에서 흔들리는 마음을 들키지 않으려는 상황",
+      "refinedIntent": "미련을 숨기며 평정심을 유지해 주도권을 잃지 않으려는 의도"
+    }
+  }
+}</code></pre>
+
+	<h2 class="endpoint"><span class="method">POST</span><code>/api/v1/coachings/{coachingId}/diagnosis</code></h2>
+	<p>
+		<code>READY_FOR_DIAGNOSIS</code> 상태의 코칭에 대해 최종 진단을 생성한다.
+		요청 본문은 받지 않으며, 저장된 초기 컨텍스트와 누적 대화 메시지를 사용한다.
+	</p>
+	<pre><code>{
+  "data": {
+    "coachingId": "1",
+    "status": "COMPLETED",
+    "refinedContext": {
+      "refinedSituation": "재회한 상대 앞에서 흔들리는 마음을 들키지 않으려는 상황",
+      "refinedIntent": "미련을 숨기며 평정심을 유지해 주도권을 잃지 않으려는 의도"
+    },
+    "result": {
+      "overallStrength": {
+        "text": "감정을 바로 드러내지 않고 버티는 선택이 장면의 긴장을 살렸습니다."
+      },
+      "feedbackCards": [
+        {
+          "order": 1,
+          "title": "첫 대사 전 목표를 더 선명히 잡아보세요",
+          "observations": [
+            {
+              "timecode": "0:00-0:15",
+              "text": "첫 대사 전 시선이 흔들리고 호흡이 짧아졌습니다."
+            }
+          ],
+          "cause": "숨기는 이유보다 긴장이 먼저 몸에 올라와 의도가 덜 보였습니다.",
+          "practiceSteps": [
+            "첫 대사 전 '약해 보이지 않는다'는 목표를 한 문장으로 속으로 말하기",
+            "상대 눈을 1초 본 뒤 대사를 시작하기"
+          ],
+          "expectedEffect": "감정 억제가 단순 긴장이 아니라 인물의 선택으로 읽힙니다."
+        }
+      ]
+    }
+  }
+}</code></pre>
+
+	<h2>데이터 모델</h2>
+	<ul>
+		<li><code>coaching</code>: 초기 입력, 영상 정보, 초기 분석 컨텍스트, 상태, 대화 요약, 구체화된 상황/의도, 최종 진단을 저장한다.</li>
+		<li><code>coaching_conversation_messages</code>: <code>coaching_id</code>, <code>role</code>, <code>turn_index</code>, <code>content</code>, <code>created_at</code>을 저장한다.</li>
+		<li>초기 질문은 <code>ASSISTANT</code> 메시지의 <code>turn_index=1</code>로 저장한다.</li>
+		<li>사용자 답변은 같은 <code>turn_index</code>의 <code>USER</code> 메시지로 저장한다.</li>
+		<li>다음 질문은 다음 <code>turn_index</code>의 <code>ASSISTANT</code> 메시지로 저장한다.</li>
+	</ul>
+
+	<h2>AI 계약</h2>
+	<h3>초기 분석</h3>
+	<ul>
+		<li>입력: 영상 파일, 장르, 상황, 인물 설정, 서브텍스트</li>
+		<li>출력: 첫 질문, transcript, analysis, measurableSignals, diagnosticHypothesis</li>
+	</ul>
+
+	<h3>대화 진행</h3>
+	<ul>
+		<li>입력: 초기 컨텍스트, 전체 메시지 히스토리, <code>minTurns=3</code>, <code>maxTurns=7</code>, 현재 턴</li>
+		<li>출력: <code>diagnosisReady</code>, <code>nextQuestion</code>, <code>summary</code>, <code>refinedSituation</code>, <code>refinedIntent</code>, <code>reason</code></li>
+		<li>서버는 3턴 전에는 <code>diagnosisReady=true</code>를 무시하고 다음 질문을 요구한다.</li>
+		<li>서버는 7턴 도달 시 <code>diagnosisReady=false</code>여도 진단 준비 상태로 전환한다.</li>
+	</ul>
+
+	<h3>최종 진단</h3>
+	<ul>
+		<li>입력: 초기 컨텍스트, 전체 메시지 히스토리, 대화 요약, 구체화된 상황/의도</li>
+		<li>출력: 최종 <code>CoachFeedback</code></li>
+		<li>프롬프트는 영상에서 확인되지 않은 사실, 시간대, 대사를 새로 만들지 않도록 제한한다.</li>
+	</ul>
 
 	<h2>오류 처리</h2>
 	<table>
 		<thead>
 		<tr>
-			<th>상황</th>
+			<th>조건</th>
 			<th>HTTP</th>
-			<th>코드</th>
+			<th>code</th>
 		</tr>
 		</thead>
 		<tbody>
 		<tr>
-			<td>답변 본문이 없거나 <code>answer</code>가 비어 있음</td>
-			<td><code>400</code></td>
-			<td><code>INVALID_DIAGNOSIS_REQUEST</code></td>
+			<td>메시지 요청 본문이 없거나 답변이 비어 있음</td>
+			<td>400</td>
+			<td><code>INVALID_MESSAGE_REQUEST</code></td>
 		</tr>
 		<tr>
-			<td>존재하지 않는 코칭 ID</td>
-			<td><code>404</code></td>
-			<td><code>COACHING_NOT_FOUND</code></td>
+			<td><code>QUESTION_READY</code> 또는 <code>IN_CONVERSATION</code>이 아닌 코칭에 메시지 제출</td>
+			<td>409</td>
+			<td><code>COACHING_NOT_READY_FOR_MESSAGE</code></td>
 		</tr>
 		<tr>
-			<td><code>QUESTION_READY</code>가 아닌 코칭에 답변 제출</td>
-			<td><code>409</code></td>
+			<td><code>READY_FOR_DIAGNOSIS</code>가 아닌 코칭에 최종 진단 요청</td>
+			<td>409</td>
 			<td><code>COACHING_NOT_READY_FOR_DIAGNOSIS</code></td>
 		</tr>
 		<tr>
-			<td>초기 AI 분석 실패</td>
-			<td>기존 정책 유지</td>
-			<td><code>AI_ANALYSIS_FAILED</code> 또는 <code>AI_ANALYSIS_TIMEOUT</code></td>
+			<td>AI 대화 질문 생성 실패</td>
+			<td>502</td>
+			<td><code>AI_CONVERSATION_FAILED</code></td>
 		</tr>
 		<tr>
-			<td>최종 진단 AI 실패</td>
-			<td><code>500</code></td>
-			<td><code>AI_DIAGNOSIS_FAILED</code> 또는 <code>AI_DIAGNOSIS_TIMEOUT</code></td>
+			<td>AI 대화 질문 생성 타임아웃</td>
+			<td>504</td>
+			<td><code>AI_CONVERSATION_TIMEOUT</code></td>
 		</tr>
 		</tbody>
 	</table>
 
-	<h2>테스트 계획</h2>
+	<h2>테스트 전략</h2>
 	<ul>
-		<li><code>CoachingApiIntegrationTest</code>: <code>POST /api/v1/coachings</code>가 <code>QUESTION_READY</code>와 초기 컨텍스트를 반환하는지 검증한다.</li>
-		<li><code>CoachingApiIntegrationTest</code>: <code>POST /api/v1/coachings/{coachingId}/diagnosis</code>가 사용자 답변을 받아 <code>COMPLETED</code>와 최종 진단을 반환하는지 검증한다.</li>
-		<li><code>CoachingApiIntegrationTest</code>: 빈 답변, 존재하지 않는 코칭, 잘못된 상태의 코칭에 대한 오류 응답을 검증한다.</li>
-		<li><code>CoachingTests</code>: <code>QUESTION_READY</code>와 <code>COMPLETED</code> 상태 전이가 도메인 규칙을 지키는지 검증한다.</li>
-		<li><code>GeminiCoachingAnalyzerTests</code>: 초기 분석 JSON 필수 필드와 최종 진단 JSON 필수 필드 누락 시 실패하는지 검증한다.</li>
-		<li>전체 변경 후 <code>./gradlew test</code>를 실행한다.</li>
+		<li>코칭 생성 응답이 <code>QUESTION_READY</code>, 첫 질문, 초기 컨텍스트, 대화 정책을 반환하는지 검증한다.</li>
+		<li>1~2번째 메시지 후에는 AI가 충분하다고 해도 <code>IN_CONVERSATION</code>이 유지되는지 검증한다.</li>
+		<li>3번째 이후 AI가 충분하다고 하면 <code>READY_FOR_DIAGNOSIS</code>로 전환되는지 검증한다.</li>
+		<li>7번째 메시지 후에는 AI 판단과 무관하게 <code>READY_FOR_DIAGNOSIS</code>로 전환되는지 검증한다.</li>
+		<li><code>READY_FOR_DIAGNOSIS</code> 상태에서만 최종 진단 API가 성공하는지 검증한다.</li>
+		<li>대화 메시지가 순서와 역할을 보존해 저장되는지 검증한다.</li>
 	</ul>
 
-	<h2>호환성 영향</h2>
-	<p class="warning">
-		이 변경은 <code>POST /api/v1/coachings</code>의 성공 응답 의미를 바꾸는 계약 변경이다.
-		기존 클라이언트가 첫 응답에서 <code>result</code>와 <code>COMPLETED</code>를 기대한다면 프론트 변경이 필요하다.
+	<h2>호환성 메모</h2>
+	<p class="note">
+		기존 1회 답변 방식의 <code>POST /api/v1/coachings/{coachingId}/diagnosis</code> 요청 본문 <code>answer</code>는 메시지 API로 이동한다.
+		프론트는 업로드 응답의 첫 질문을 표시한 뒤, 사용자 답변마다 <code>/messages</code>를 호출하고,
+		<code>READY_FOR_DIAGNOSIS</code>가 반환되면 <code>/diagnosis</code>를 호출해야 한다.
 	</p>
-	<ul>
-		<li>요청 필드는 유지하므로 업로드 폼 입력 계약은 깨지지 않는다.</li>
-		<li>성공 응답의 <code>status</code>와 본문 구조는 바뀐다.</li>
-		<li>최종 결과가 필요한 클라이언트는 새 <code>/diagnosis</code> API를 추가 호출해야 한다.</li>
-		<li>기존 평가 등록 API는 <code>COMPLETED</code> 이후에만 사용할 수 있도록 유지한다.</li>
-	</ul>
-
-	<h2>구현 순서 초안</h2>
-	<ol>
-		<li>실패하는 통합 테스트로 새 API 계약을 먼저 고정한다.</li>
-		<li>초기 컨텍스트와 최종 진단용 DTO, application model을 추가한다.</li>
-		<li>도메인 상태와 상태 전이 메서드를 추가한다.</li>
-		<li>마이그레이션과 엔티티 매핑을 추가한다.</li>
-		<li>stub analyzer를 새 계약에 맞춰 수정해 API 테스트를 통과시킨다.</li>
-		<li>Gemini 프롬프트와 파서를 새 계약에 맞춰 수정한다.</li>
-		<li>문서와 기존 API 명세를 실제 구현 결과에 맞게 갱신한다.</li>
-	</ol>
-
-	<h2>구현 기준</h2>
-	<ul>
-		<li>초기 컨텍스트 필드명은 응답 예시의 <code>dialogue.question</code>과 <code>context</code> 하위 필드를 그대로 사용한다.</li>
-		<li><code>measurableSignals.value</code>는 숫자 전용으로 둔다. 숫자로 표현할 수 없는 내용은 <code>evidence</code>에 문장으로 넣는다.</li>
-		<li>최종 진단 API 응답의 <code>result</code>는 기존 <code>CoachFeedback</code> 카드 구조를 유지한다.</li>
-		<li>AI가 transcript를 만들 수 없는 경우 <code>transcript</code>는 빈 문자열을 허용한다. 단, <code>analysis</code>, <code>question</code>, <code>diagnosticHypothesis</code>는 필수다.</li>
-	</ul>
 </main>
 </body>
 </html>
