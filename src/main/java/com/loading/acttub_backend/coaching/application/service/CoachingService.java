@@ -109,14 +109,7 @@ public class CoachingService {
 		));
 		messages = messageRepository.findByCoachingIdOrderByTurnIndexAscRoleAsc(coaching.getId());
 
-		CoachingConversationResult aiResult = coachingAnalyzer.continueConversation(
-				toInput(coaching),
-				coaching.getInitialContext(),
-				messages,
-				turnIndex,
-				minConversationTurns,
-				maxConversationTurns
-		);
+		CoachingConversationResult aiResult = continueConversation(coaching, messages, turnIndex);
 		CoachingConversationResult policyResult = applyConversationPolicy(aiResult, turnIndex);
 
 		if (policyResult.diagnosisReady()) {
@@ -162,14 +155,7 @@ public class CoachingService {
 			);
 		}
 		List<CoachingConversationMessage> messages = messageRepository.findByCoachingIdOrderByTurnIndexAscRoleAsc(coaching.getId());
-		CoachingDiagnosisResult diagnosisResult = coachingAnalyzer.diagnose(
-				toInput(coaching),
-				coaching.getInitialContext(),
-				messages,
-				coaching.getConversationSummary(),
-				coaching.getRefinedSituation(),
-				coaching.getRefinedIntent()
-		);
+		CoachingDiagnosisResult diagnosisResult = diagnose(coaching, messages);
 		coaching.completeDiagnosis(diagnosisResult, OffsetDateTime.now(clock));
 		coachingRepository.saveAndFlush(coaching);
 		int turnIndex = countUserMessages(messages);
@@ -249,6 +235,65 @@ public class CoachingService {
 				List.of(new MeasurableSignal("conversation_turn_target", java.math.BigDecimal.valueOf(minConversationTurns), "턴", "최소 대화 턴 정책")),
 				"연기 의도를 구체화하기 위한 대화가 필요합니다."
 		);
+	}
+
+	private CoachingConversationResult continueConversation(Coaching coaching, List<CoachingConversationMessage> messages,
+			int turnIndex) {
+		try {
+			return coachingAnalyzer.continueConversation(
+					toInput(coaching),
+					coaching.getInitialContext(),
+					messages,
+					turnIndex,
+					minConversationTurns,
+					maxConversationTurns
+			);
+		} catch (CoachingAnalysisTimeoutException e) {
+			coaching.fail("AI_CONVERSATION_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			throw new ApplicationException(
+					"AI_CONVERSATION_TIMEOUT",
+					"Coaching conversation timed out.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
+			);
+		} catch (RuntimeException e) {
+			coaching.fail("AI_CONVERSATION_FAILED", e.getMessage(), OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			throw new ApplicationException(
+					"AI_CONVERSATION_FAILED",
+					"Coaching conversation failed.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
+			);
+		}
+	}
+
+	private CoachingDiagnosisResult diagnose(Coaching coaching, List<CoachingConversationMessage> messages) {
+		try {
+			return coachingAnalyzer.diagnose(
+					toInput(coaching),
+					coaching.getInitialContext(),
+					messages,
+					coaching.getConversationSummary(),
+					coaching.getRefinedSituation(),
+					coaching.getRefinedIntent()
+			);
+		} catch (CoachingAnalysisTimeoutException e) {
+			coaching.fail("AI_DIAGNOSIS_TIMEOUT", e.getMessage(), OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			throw new ApplicationException(
+					"AI_DIAGNOSIS_TIMEOUT",
+					"Coaching diagnosis timed out.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
+			);
+		} catch (RuntimeException e) {
+			coaching.fail("AI_DIAGNOSIS_FAILED", e.getMessage(), OffsetDateTime.now(clock));
+			coachingRepository.saveAndFlush(coaching);
+			throw new ApplicationException(
+					"AI_DIAGNOSIS_FAILED",
+					"Coaching diagnosis failed.",
+					Map.of("coachingId", String.valueOf(coaching.getId()), "status", CoachingStatus.FAILED.name())
+			);
+		}
 	}
 
 	private Coaching findCoaching(Long coachingId) {

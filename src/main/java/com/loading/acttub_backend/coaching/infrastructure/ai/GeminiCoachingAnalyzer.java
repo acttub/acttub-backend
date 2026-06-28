@@ -15,6 +15,10 @@ import com.loading.acttub_backend.coaching.application.port.CoachingAnalysisTime
 import com.loading.acttub_backend.coaching.application.port.CoachingAnalyzer;
 import com.loading.acttub_backend.coaching.domain.CoachFeedback;
 import com.loading.acttub_backend.coaching.domain.CoachingAnalysisResult;
+import com.loading.acttub_backend.coaching.domain.CoachingConversationMessage;
+import com.loading.acttub_backend.coaching.domain.CoachingConversationResult;
+import com.loading.acttub_backend.coaching.domain.CoachingDiagnosisResult;
+import com.loading.acttub_backend.coaching.domain.CoachingInitialContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,6 +91,48 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 			throw new IllegalStateException("Gemini analysis request failed.", e);
 		} finally {
 			deleteFile(uploadedFile);
+		}
+	}
+
+	@Override
+	public CoachingConversationResult continueConversation(CoachingInput input, CoachingInitialContext initialContext,
+			List<CoachingConversationMessage> messages, int turnIndex, int minTurns, int maxTurns) {
+		requireApiKey();
+		try {
+			return parseConversationResult(generateText(conversationPrompt(input, initialContext, messages, turnIndex, minTurns, maxTurns)));
+		} catch (ResourceAccessException e) {
+			throw new CoachingAnalysisTimeoutException("Gemini conversation timed out.", e);
+		} catch (IOException e) {
+			throw new IllegalStateException("Failed to read Gemini conversation response.", e);
+		} catch (RestClientResponseException e) {
+			throw new IllegalStateException("Gemini conversation request failed: " + e.getResponseBodyAsString(), e);
+		} catch (RestClientException e) {
+			throw new IllegalStateException("Gemini conversation request failed.", e);
+		}
+	}
+
+	@Override
+	public CoachingDiagnosisResult diagnose(CoachingInput input, CoachingInitialContext initialContext,
+			List<CoachingConversationMessage> messages, String conversationSummary, String refinedSituation,
+			String refinedIntent) {
+		requireApiKey();
+		try {
+			return new CoachingDiagnosisResult(parseFeedback(generateText(finalDiagnosisPrompt(
+					input,
+					initialContext,
+					messages,
+					conversationSummary,
+					refinedSituation,
+					refinedIntent
+			))));
+		} catch (ResourceAccessException e) {
+			throw new CoachingAnalysisTimeoutException("Gemini diagnosis timed out.", e);
+		} catch (IOException e) {
+			throw new IllegalStateException("Failed to read Gemini diagnosis response.", e);
+		} catch (RestClientResponseException e) {
+			throw new IllegalStateException("Gemini diagnosis request failed: " + e.getResponseBodyAsString(), e);
+		} catch (RestClientException e) {
+			throw new IllegalStateException("Gemini diagnosis request failed.", e);
 		}
 	}
 
@@ -199,12 +245,58 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 				.body(String.class);
 	}
 
+	private String generateText(String prompt) {
+		return restClient.post()
+				.uri("/v1beta/models/{model}:generateContent", model)
+				.header("x-goog-api-key", apiKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(Map.of(
+						"contents", List.of(Map.of(
+								"role", "user",
+								"parts", List.of(Map.of("text", prompt))
+						)),
+						"generationConfig", Map.of(
+								"temperature", temperature,
+								"responseMimeType", "application/json"
+						)
+				))
+				.retrieve()
+				.body(String.class);
+	}
+
 	private CoachFeedback parseFeedback(String response) throws IOException {
 		String text = responseText(response);
 		JsonNode root = objectMapper.readTree(stripJsonFence(text));
 		return new CoachFeedback(
 				new CoachFeedback.OverallStrength(requiredText(root, "overallStrength", "text")),
 				requiredFeedbackCards(root)
+		);
+	}
+
+	private CoachingConversationResult parseConversationResult(String response) throws IOException {
+		String text = responseText(response);
+		JsonNode root = objectMapper.readTree(stripJsonFence(text));
+		boolean diagnosisReady = root.path("diagnosisReady").asBoolean(false);
+		String nextQuestion = optionalText(root, "nextQuestion");
+		String reason = optionalText(root, "reason");
+		String summary = optionalText(root, "summary");
+		String refinedSituation = optionalText(root, "refinedSituation");
+		String refinedIntent = optionalText(root, "refinedIntent");
+
+		if (diagnosisReady && (summary == null || refinedSituation == null || refinedIntent == null)) {
+			throw new IllegalStateException("Gemini conversation response is ready but missing summary or refined context.");
+		}
+		if (!diagnosisReady && nextQuestion == null) {
+			throw new IllegalStateException("Gemini conversation response is not ready but missing nextQuestion.");
+		}
+
+		return new CoachingConversationResult(
+				diagnosisReady,
+				nextQuestion,
+				reason,
+				summary,
+				refinedSituation,
+				refinedIntent
 		);
 	}
 
@@ -362,11 +454,161 @@ public class GeminiCoachingAnalyzer implements CoachingAnalyzer {
 				""".formatted(input.resolvedGenre(), input.situation(), input.characterSetting(), promptSubtext(input));
 	}
 
+	private String conversationPrompt(CoachingInput input, CoachingInitialContext initialContext,
+			List<CoachingConversationMessage> messages, int turnIndex, int minTurns, int maxTurns) {
+		return """
+				당신은 배우의 연기 의도를 구체화하는 챗봇형 연기 코치입니다.
+				영상은 이미 초기 분석되었습니다. 새 영상 사실, 새 timecode, 새 대사를 만들지 마세요.
+				목표는 배우와의 대화를 통해 장면 상황, 인물 목표, 숨기는 감정의 이유를 최종 진단에 충분할 만큼 구체화하는 것입니다.
+
+				[초기 입력]
+				장르: %s
+				상황: %s
+				인물 설정: %s
+				서브텍스트: %s
+
+				[초기 AI 컨텍스트]
+				첫 질문: %s
+				대본: %s
+				분석: %s
+				진단 가설: %s
+
+				[대화 정책]
+				현재 사용자 답변 턴: %d
+				최소 턴: %d
+				최대 턴: %d
+
+				[대화 기록]
+				%s
+
+				[출력 규칙]
+				설명 없이 JSON 객체 하나만 반환하세요.
+				최종 진단에 충분하지 않으면 diagnosisReady=false, nextQuestion에 사용자에게 물어볼 질문 하나를 씁니다.
+				충분하면 diagnosisReady=true, summary, refinedSituation, refinedIntent를 모두 씁니다.
+				{
+				  "diagnosisReady": false,
+				  "nextQuestion": "다음 질문",
+				  "reason": "판단 이유",
+				  "summary": null,
+				  "refinedSituation": null,
+				  "refinedIntent": null
+				}
+				또는
+				{
+				  "diagnosisReady": true,
+				  "nextQuestion": null,
+				  "reason": "판단 이유",
+				  "summary": "누적 대화 요약",
+				  "refinedSituation": "구체화된 상황",
+				  "refinedIntent": "구체화된 연기 의도"
+				}
+				""".formatted(
+				input.resolvedGenre(),
+				input.situation(),
+				input.characterSetting(),
+				input.displaySubtext(),
+				initialContext.question(),
+				initialContext.transcript(),
+				initialContext.analysis(),
+				initialContext.diagnosticHypothesis(),
+				turnIndex,
+				minTurns,
+				maxTurns,
+				formatMessages(messages)
+		);
+	}
+
+	private String finalDiagnosisPrompt(CoachingInput input, CoachingInitialContext initialContext,
+			List<CoachingConversationMessage> messages, String conversationSummary, String refinedSituation,
+			String refinedIntent) {
+		return """
+				당신은 배우를 돕는 수석 연기 코치입니다.
+				영상은 이미 초기 분석되었고, 이후 배우와 대화해 의도를 구체화했습니다.
+				새 영상 사실, 새 timecode, 새 대사를 만들지 마세요. 아래 초기 컨텍스트와 대화 기록에 있는 정보만 사용하세요.
+
+				[초기 입력]
+				장르: %s
+				상황: %s
+				인물 설정: %s
+				서브텍스트: %s
+
+				[초기 AI 컨텍스트]
+				대본: %s
+				분석: %s
+				진단 가설: %s
+
+				[대화 기록]
+				%s
+
+				[구체화된 맥락]
+				요약: %s
+				상황: %s
+				의도: %s
+
+				[출력]
+				설명 없이 JSON 객체 하나만 반환하세요.
+				반드시 아래 JSON 스키마와 필드명만 사용하세요.
+				{
+				  "overallStrength": {
+				    "text": "전반적으로 ... 로 시작하는 강점 1문장"
+				  },
+				  "feedbackCards": [
+				    {
+				      "order": 1,
+				      "title": "배우가 다음 테이크에서 바꿀 수 있는 한 단계의 연기 원인",
+				      "observations": [
+				        {
+				          "timecode": "M:SS 또는 전반",
+				          "text": "초기 컨텍스트나 대화 기록에 근거한 관찰"
+				        }
+				      ],
+				      "cause": "왜냐면 ...",
+				      "practiceSteps": ["1단계 실행 행동", "2단계 실행 행동"],
+				      "expectedEffect": "그럼 ... 된다"
+				    }
+				  ]
+				}
+				""".formatted(
+				input.resolvedGenre(),
+				input.situation(),
+				input.characterSetting(),
+				input.displaySubtext(),
+				initialContext.transcript(),
+				initialContext.analysis(),
+				initialContext.diagnosticHypothesis(),
+				formatMessages(messages),
+				conversationSummary,
+				refinedSituation,
+				refinedIntent
+		);
+	}
+
+	private String formatMessages(List<CoachingConversationMessage> messages) {
+		StringBuilder builder = new StringBuilder();
+		for (CoachingConversationMessage message : messages) {
+			builder.append(message.getTurnIndex())
+					.append(". ")
+					.append(message.getRole().name())
+					.append(": ")
+					.append(message.getContent())
+					.append("\n");
+		}
+		return builder.toString();
+	}
+
 	private String promptSubtext(CoachingInput input) {
 		if (input.subtext() == null) {
 			return "";
 		}
 		return input.subtext();
+	}
+
+	private String optionalText(JsonNode root, String field) {
+		String value = root.path(field).asText("").trim();
+		if (value.isBlank() || "null".equalsIgnoreCase(value)) {
+			return null;
+		}
+		return value;
 	}
 
 	private List<CoachFeedback.FeedbackCard> requiredFeedbackCards(JsonNode root) {
