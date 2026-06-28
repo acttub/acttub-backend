@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.loading.acttub_backend.coaching.application.model.ApplicationException;
+import com.loading.acttub_backend.waitlist.application.model.WaitlistException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -32,6 +34,13 @@ class ApiExceptionHandler {
 				.body(ApiErrorEnvelope.error(exception.code(), exception.getMessage(), exception.details()));
 	}
 
+	@ExceptionHandler(WaitlistException.class)
+	ResponseEntity<ApiErrorEnvelope> handleWaitlistException(WaitlistException exception) {
+		return ResponseEntity
+				.status(statusForWaitlist(exception.code()))
+				.body(ApiErrorEnvelope.error(exception.code(), exception.getMessage(), exception.details()));
+	}
+
 	@ExceptionHandler(MissingServletRequestPartException.class)
 	ResponseEntity<ApiErrorEnvelope> handleMissingPart(MissingServletRequestPartException exception) {
 		return invalidCoachingRequest(exception.getRequestPartName());
@@ -52,7 +61,10 @@ class ApiExceptionHandler {
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
-	ResponseEntity<ApiErrorEnvelope> handleUnreadableMessage() {
+	ResponseEntity<ApiErrorEnvelope> handleUnreadableMessage(HttpServletRequest request) {
+		if (request.getRequestURI().equals("/api/v1/waitlist")) {
+			return invalidWaitlistRequest("body");
+		}
 		return invalidEvaluationRequest("body");
 	}
 
@@ -97,6 +109,14 @@ class ApiExceptionHandler {
 		));
 	}
 
+	private ResponseEntity<ApiErrorEnvelope> invalidWaitlistRequest(String field) {
+		return ResponseEntity.badRequest().body(ApiErrorEnvelope.error(
+				"INVALID_WAITLIST_REQUEST",
+				"Invalid waitlist request.",
+				Map.of("fields", List.of(field))
+		));
+	}
+
 	private HttpStatus statusFor(String code) {
 		return switch (code) {
 			case "INVALID_COACHING_REQUEST", "INVALID_EVALUATION_REQUEST" -> HttpStatus.BAD_REQUEST;
@@ -106,6 +126,14 @@ class ApiExceptionHandler {
 			case "AI_ANALYSIS_FAILED" -> HttpStatus.BAD_GATEWAY;
 			case "AI_ANALYSIS_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
 			case "VIDEO_STORAGE_FAILED" -> HttpStatus.INTERNAL_SERVER_ERROR;
+			default -> HttpStatus.INTERNAL_SERVER_ERROR;
+		};
+	}
+
+	private HttpStatus statusForWaitlist(String code) {
+		return switch (code) {
+			case "INVALID_WAITLIST_REQUEST" -> HttpStatus.BAD_REQUEST;
+			case "WAITLIST_ALREADY_REGISTERED" -> HttpStatus.CONFLICT;
 			default -> HttpStatus.INTERNAL_SERVER_ERROR;
 		};
 	}
