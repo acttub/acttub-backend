@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>연기 연습 플로우 다이어그램</title>
+	<style>
+		:root {
+			color-scheme: light;
+			--bg: #ffffff;
+			--canvas: #f9fafb;
+			--surface: #ffffff;
+			--ink: #191f28;
+			--muted: #6b7684;
+			--line: #d1d6db;
+			--blue: #3182f6;
+			--blue-soft: #e8f3ff;
+			--purple: #7c3aed;
+			--purple-soft: #f3e8ff;
+			--green: #03b26c;
+			--green-soft: #e9f9f1;
+			--shadow: 0 8px 24px rgba(25, 31, 40, 0.08);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--ink);
+			font-family: "Toss Product Sans", "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+			letter-spacing: 0;
+		}
+
+		main {
+			width: min(1180px, 100vw);
+			margin: 0 auto;
+			padding: 34px 24px 54px;
+		}
+
+		h1 {
+			margin: 0 0 22px;
+			text-align: center;
+			font-size: 22px;
+			line-height: 1.35;
+			font-weight: 800;
+		}
+
+		.diagram {
+			position: relative;
+			width: 100%;
+			aspect-ratio: 1200 / 880;
+			min-height: 760px;
+			border: 1px solid var(--line);
+			border-radius: 28px;
+			background: var(--canvas);
+			box-shadow: var(--shadow);
+			overflow: hidden;
+		}
+
+		.lane {
+			position: absolute;
+			top: 56px;
+			bottom: 56px;
+			border-radius: 24px;
+			background: rgba(255, 255, 255, 0.72);
+			border: 1px solid #eef0f2;
+		}
+
+		.web-lane {
+			left: 70px;
+			width: 390px;
+		}
+
+		.ai-lane {
+			left: 590px;
+			right: 70px;
+		}
+
+		.lane-title {
+			position: absolute;
+			z-index: 3;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 30px;
+			padding: 4px 12px;
+			border-radius: 9999px;
+			background: var(--surface);
+			color: var(--muted);
+			font-size: 13px;
+			font-weight: 800;
+			box-shadow: 0 2px 8px rgba(25, 31, 40, 0.06);
+		}
+
+		.web-title {
+			top: 82px;
+			left: 212px;
+		}
+
+		.ai-title {
+			top: 82px;
+			left: 812px;
+		}
+
+		.box {
+			position: absolute;
+			z-index: 3;
+			display: grid;
+			place-items: center;
+			border: 2px solid;
+			border-radius: 18px;
+			background: var(--surface);
+			text-align: center;
+			font-weight: 800;
+			line-height: 1.45;
+		}
+
+		.web {
+			left: 142px;
+			width: 250px;
+			color: var(--ink);
+			border-color: #333d4b;
+			font-size: 15px;
+		}
+
+		.ai {
+			color: var(--ink);
+			border-color: var(--purple);
+			background: var(--surface);
+			font-size: 15px;
+		}
+
+		.upload {
+			top: 128px;
+			height: 76px;
+			border-color: var(--blue);
+			background: var(--blue-soft);
+		}
+
+		.analysis {
+			top: 302px;
+			height: 104px;
+		}
+
+		.interview {
+			top: 514px;
+			height: 92px;
+		}
+
+		.cleanup {
+			top: 716px;
+			height: 104px;
+			border-color: var(--green);
+			background: var(--green-soft);
+		}
+
+		.embedding {
+			top: 246px;
+			left: 706px;
+			width: 330px;
+			height: 82px;
+		}
+
+		.summary {
+			top: 352px;
+			left: 684px;
+			width: 280px;
+			height: 82px;
+		}
+
+		.agent {
+			top: 508px;
+			left: 684px;
+			width: 300px;
+			height: 104px;
+		}
+
+		.report {
+			top: 716px;
+			left: 724px;
+			width: 320px;
+			height: 104px;
+			border-color: var(--green);
+			background: var(--green-soft);
+		}
+
+		.note {
+			position: absolute;
+			z-index: 3;
+			color: var(--muted);
+			font-size: 12px;
+			font-weight: 700;
+		}
+
+		.analysis-note {
+			top: 418px;
+			left: 166px;
+		}
+
+		.interview-note {
+			top: 620px;
+			left: 168px;
+		}
+
+		.arrow-layer {
+			position: absolute;
+			inset: 0;
+			z-index: 2;
+			width: 100%;
+			height: 100%;
+			pointer-events: none;
+		}
+
+		.flow-line {
+			fill: none;
+			stroke: #333d4b;
+			stroke-width: 2.5;
+			stroke-linecap: round;
+			stroke-linejoin: round;
+		}
+
+		.ai-line {
+			fill: none;
+			stroke: var(--purple);
+			stroke-width: 2.5;
+			stroke-linecap: round;
+			stroke-linejoin: round;
+		}
+
+		.result-line {
+			fill: none;
+			stroke: var(--green);
+			stroke-width: 2.5;
+			stroke-linecap: round;
+			stroke-linejoin: round;
+		}
+
+		@media (max-width: 860px) {
+			main {
+				padding: 24px 14px 40px;
+			}
+
+			.diagram {
+				width: 1120px;
+				min-height: 820px;
+			}
+
+			body {
+				overflow-x: auto;
+			}
+		}
+	</style>
+</head>
+<body>
+<main>
+	<h1>연기 연습</h1>
+
+	<section class="diagram" aria-label="연기 연습 플로우 다이어그램">
+		<div class="lane web-lane" aria-hidden="true"></div>
+		<div class="lane ai-lane" aria-hidden="true"></div>
+
+		<div class="lane-title web-title">웹 플로우</div>
+		<div class="lane-title ai-title">AI 기능</div>
+
+		<div class="box web upload">영상 업로드</div>
+		<div class="box web analysis">영상 분석</div>
+		<div class="box web interview">진단 인터뷰</div>
+		<div class="box web cleanup">진단 정리</div>
+
+		<div class="note analysis-note">분석 결과 생성</div>
+		<div class="note interview-note">질문/답변 반복</div>
+
+		<div class="box ai embedding">embedding</div>
+		<div class="box ai summary">AI summary</div>
+		<div class="box ai agent">AI agent</div>
+		<div class="box ai report">AI report</div>
+
+		<svg class="arrow-layer" viewBox="0 0 1200 880" preserveAspectRatio="none" aria-hidden="true">
+			<defs>
+				<marker id="mainArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+					<path d="M 0 0 L 10 5 L 0 10 z" fill="#333d4b"></path>
+				</marker>
+				<marker id="aiArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+					<path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed"></path>
+				</marker>
+				<marker id="resultArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+					<path d="M 0 0 L 10 5 L 0 10 z" fill="#03b26c"></path>
+				</marker>
+			</defs>
+
+			<path class="flow-line" marker-end="url(#mainArrow)" d="M 267 204 L 267 294"></path>
+			<path class="flow-line" marker-end="url(#mainArrow)" d="M 267 406 L 267 506"></path>
+			<path class="flow-line" marker-end="url(#mainArrow)" d="M 267 606 L 267 708"></path>
+
+			<path class="ai-line" marker-end="url(#aiArrow)" d="M 392 332 C 486 332 546 288 694 288"></path>
+			<path class="ai-line" marker-end="url(#aiArrow)" d="M 392 374 C 504 374 548 394 672 394"></path>
+			<path class="ai-line" marker-end="url(#aiArrow)" d="M 392 560 C 506 560 546 560 672 560"></path>
+			<path class="result-line" marker-end="url(#resultArrow)" d="M 392 768 C 524 768 594 768 712 768"></path>
+		</svg>
+	</section>
+</main>
+</body>
+</html>

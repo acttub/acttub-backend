@@ -47,10 +47,10 @@ public class CoachingController {
 
 	@PostMapping(value = "/api/v1/coachings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@Operation(
-			summary = "코칭 피드백 생성",
-			description = "연기 영상과 장르, 상황, 인물 설정, 선택 서브텍스트를 전달해 코칭 피드백 카드를 생성합니다."
+			summary = "코칭 초기 분석 및 첫 질문 생성",
+			description = "연기 영상과 장르, 상황, 인물 설정, 선택 서브텍스트를 전달해 초기 분석 컨텍스트와 첫 챗봇 질문을 생성합니다."
 	)
-	@ApiResponse(responseCode = "201", description = "코칭 피드백 생성 완료")
+	@ApiResponse(responseCode = "201", description = "코칭 첫 질문 생성 완료")
 	public ResponseEntity<ApiEnvelope<CoachingResponse>> create(
 			@Parameter(description = "업로드할 연기 영상 파일. 허용 MIME type: video/mp4, video/quicktime, video/webm")
 			@RequestParam("video") MultipartFile video,

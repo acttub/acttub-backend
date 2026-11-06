@@ -1,0 +1,16 @@
+- main [ref=e2]:
+  - heading "연기 연습" [level=1] [ref=e3]
+  - region "연기 연습 플로우 다이어그램" [ref=e4]:
+    - generic [ref=e7]: 웹 플로우
+    - generic [ref=e8]: AI 기능
+    - generic [ref=e9]: 영상 업로드
+    - generic [ref=e10]: 영상 분석
+    - generic [ref=e11]: 진단 인터뷰
+    - generic [ref=e12]: 진단 정리
+    - generic [ref=e13]: 분석 결과 생성
+    - generic [ref=e14]: 질문/답변 반복
+    - generic [ref=e15]: embedding
+    - generic [ref=e16]: AI summary
+    - generic [ref=e17]: AI agent
+    - generic [ref=e18]: AI report
+    - img
