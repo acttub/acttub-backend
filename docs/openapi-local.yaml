@@ -1,0 +1,376 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Acttub Backend Local API",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local Spring Boot server"
+    }
+  ],
+  "paths": {
+    "/api/v1/coachings": {
+      "post": {
+        "summary": "Create coaching feedback",
+        "operationId": "createCoaching",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "video",
+                  "performanceIntent"
+                ],
+                "properties": {
+                  "video": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "performanceIntent": {
+                    "type": "string",
+                    "example": "Actor tries to stay composed, then breaks down at the end."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Coaching feedback created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachingEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "413": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/coachings/{coachingId}/evaluation": {
+      "post": {
+        "summary": "Create a coaching evaluation",
+        "operationId": "createCoachingEvaluation",
+        "parameters": [
+          {
+            "name": "coachingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Coaching evaluation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "ErrorResponse": {
+        "description": "API error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "CoachingEnvelope": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CoachingResponse"
+          }
+        }
+      },
+      "EvaluationEnvelope": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EvaluationResponse"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVALID_COACHING_REQUEST"
+          },
+          "message": {
+            "type": "string",
+            "example": "Invalid coaching request."
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "CoachingResponse": {
+        "type": "object",
+        "required": [
+          "coachingId",
+          "status",
+          "createdAt",
+          "input",
+          "result"
+        ],
+        "properties": {
+          "coachingId": {
+            "type": "string",
+            "example": "1"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ANALYZING",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "example": "COMPLETED"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "input": {
+            "$ref": "#/components/schemas/CoachingInput"
+          },
+          "result": {
+            "$ref": "#/components/schemas/CoachFeedback"
+          }
+        }
+      },
+      "CoachingInput": {
+        "type": "object",
+        "required": [
+          "performanceIntent"
+        ],
+        "properties": {
+          "performanceIntent": {
+            "type": "string"
+          }
+        }
+      },
+      "CoachFeedback": {
+        "type": "object",
+        "required": [
+          "sceneIntent",
+          "strength",
+          "focus",
+          "nextStep"
+        ],
+        "properties": {
+          "sceneIntent": {
+            "$ref": "#/components/schemas/SceneIntent"
+          },
+          "strength": {
+            "$ref": "#/components/schemas/Strength"
+          },
+          "focus": {
+            "$ref": "#/components/schemas/Focus"
+          },
+          "nextStep": {
+            "$ref": "#/components/schemas/NextStep"
+          }
+        }
+      },
+      "SceneIntent": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        }
+      },
+      "Strength": {
+        "type": "object",
+        "properties": {
+          "timecode": {
+            "type": "string"
+          },
+          "axis": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          }
+        }
+      },
+      "Focus": {
+        "type": "object",
+        "properties": {
+          "timecode": {
+            "type": "string"
+          },
+          "axes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "observedSignal": {
+            "type": "string"
+          },
+          "rootCause": {
+            "type": "string"
+          },
+          "intentGap": {
+            "type": "string"
+          },
+          "prescription": {
+            "type": "string"
+          }
+        }
+      },
+      "NextStep": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          }
+        }
+      },
+      "EvaluationRequest": {
+        "type": "object",
+        "required": [
+          "rating"
+        ],
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "example": 5
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true,
+            "example": "The feedback was specific and actionable."
+          }
+        }
+      },
+      "EvaluationResponse": {
+        "type": "object",
+        "required": [
+          "evaluationId",
+          "coachingId",
+          "rating",
+          "createdAt"
+        ],
+        "properties": {
+          "evaluationId": {
+            "type": "string",
+            "example": "1"
+          },
+          "coachingId": {
+            "type": "string",
+            "example": "1"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}
